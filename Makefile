@@ -1,3 +1,4 @@
+MAX_VERSION := 8
 SCRIPTS := source/scripts
 BUILD := build
 LUAJIT := $(BUILD)/deps/luajit-install/lib/libluajit-5.1.a
@@ -28,4 +29,4 @@ clean:
 setup:
 	git submodule init
 	git submodule update
-	ln -s $(shell pwd) "$(HOME)/Documents/Max 8/Packages/$(shell basename `pwd`)"
+	ln -s $(shell pwd) "$(HOME)/Documents/Max $(MAX_VERSION)/Packages/$(shell basename `pwd`)"

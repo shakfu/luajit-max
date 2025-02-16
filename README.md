@@ -1,4 +1,4 @@
-# luajit_max
+# luajit-max
 
 Includes two externals which both embed luajit in a Max/Msp external:
 
@@ -25,7 +25,7 @@ In this case, the relevant lua file loaded at start is called `dsp_stk.lua`. The
 Just type the following:
 
 ```bash
-git clone https://github.com/shakfu/luajit_max.git
+git clone https://github.com/shakfu/luajit-max.git
 make setup
 make
 ```
@@ -35,7 +35,7 @@ Note: `make setup` does the following:
 ```bash
 git submodule init
 git submodule update
-ln -s $(shell pwd) "$(HOME)/Documents/Max 8/Packages/$(shell basename `pwd`)"
+ln -s $(shell pwd) "$(HOME)/Documents/Max $(MAX_VERSION)/Packages/$(shell basename `pwd`)"
 ```
 
 ## Usage
