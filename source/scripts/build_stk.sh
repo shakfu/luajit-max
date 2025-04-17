@@ -15,7 +15,7 @@ function build_external_cmake_dep() {
 	git clone --depth=1 ${2} ${1}-src && \
 	mkdir ${1}-build && \
 	cd ${1}-build && \
-	cmake ${3} ../${1}-src && \
+	cmake ${3} ../${1}-src -DCMAKE_POLICY_VERSION_MINIMUM=3.5 && \
 	make && \
 	cmake --install . --prefix `pwd`/../${1}-install
 }

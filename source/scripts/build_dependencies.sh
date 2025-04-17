@@ -32,4 +32,5 @@ function build_external_make_dep() {
 
 build_external_make_dep \
 	luajit \
-	https://luajit.org/git/luajit.git
+	"--branch v2.1 https://github.com/LuaJIT/LuaJIT.git" \
+	-DCMAKE_POLICY_VERSION_MINIMUM=3.5

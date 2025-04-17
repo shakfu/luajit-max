@@ -1,4 +1,4 @@
-MAX_VERSION := 8
+MAX_VERSION := 9
 SCRIPTS := source/scripts
 BUILD := build
 LUAJIT := $(BUILD)/deps/luajit-install/lib/libluajit-5.1.a
@@ -10,7 +10,12 @@ all: cmake
 
 
 cmake: $(LUAJIT) $(STK)
-	@mkdir -p build && cd build && cmake .. -GXcode && cmake --build .
+	@mkdir -p build && \
+		cd build && \
+		cmake .. -GXcode \
+			-DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+			&& \
+		cmake --build . --config Release
 
 $(LUAJIT):
 	@bash $(SCRIPTS)/build_dependencies.sh

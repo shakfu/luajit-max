@@ -47,6 +47,7 @@ Open the help files for demonstrations of the externals.
 
 - [LuaJIT](https://luajit.org)
 - [STK Introduction](http://www.music.mcgill.ca/~gary/307/week8/stk.html)
+- [luajit_audio](https://github.com/grrrwaaa/luajit_audio.git)
 - [LuaBridge3](https://github.com/kunitoki/LuaBridge3)
 - [cxxheaderparser](https://github.com/robotpy/cxxheaderparser) -- python c++ header parser used in the parser/generator script.
 
