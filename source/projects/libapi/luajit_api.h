@@ -22,6 +22,13 @@
 #include "api_inlet.h"
 #include "api_box.h"
 #include "api_patchline.h"
+#include "api_path.h"
+#include "api_database.h"
+#include "api_hashtab.h"
+#include "api_time.h"
+#include "api_preset.h"
+#include "api_qelem.h"
+#include "api_linklist.h"
 
 // Forward declarations for future API modules
 
@@ -73,8 +80,18 @@ static void luajit_api_init(lua_State* L) {
     register_inlet_type(L);
     register_box_type(L);
     register_patchline_type(L);
+    register_path_type(L);
+    register_database_type(L);
+    register_hashtab_type(L);
+    register_time_type(L);
+    register_preset_type(L);
+    register_qelem_type(L);
+    register_linklist_type(L);
 
-    // Future type registrations (LOW priority):
+    // Register OutletWrapper type (for injection in luajit external)
+    register_outlet_wrapper_type(L);
+
+    // Future type registrations (remaining LOW priority):
 }
 
 // ----------------------------------------------------------------------------

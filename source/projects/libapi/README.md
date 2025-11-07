@@ -84,7 +84,7 @@ This API wrapper follows the design patterns established by the pktpy project:
 
 ## Current API Coverage
 
-**14 API wrappers completed** providing comprehensive access to Max/MSP functionality.
+**21 API wrappers completed** providing comprehensive access to Max/MSP functionality.
 
 ### Console Functions
 - `api.post(msg)` - Post message to Max console
@@ -263,11 +263,129 @@ This API wrapper follows the design patterns established by the pktpy project:
 - `patchline:get_nextline()` - Get next patchline in list
 - `patchline:pointer()` - Get raw pointer value
 
+### Path API (File System Operations)
+- `api.path_getdefault()` - Get default search path ID
+- `api.path_setdefault(path_id, recursive)` - Set default search path
+- `api.path_getapppath()` - Get Max application path ID
+- `api.locatefile_extended(filename, typelist)` - Locate file in Max search path, returns {filename, path_id, filetype} or nil
+- `api.path_toabsolutesystempath(path_id, filename)` - Convert path ID + filename to absolute path
+- `api.path_nameconform(src, style, type)` - Convert path string to specified style
+- `api.path_opensysfile(filename, path_id, perm)` - Open file for reading/writing, returns filehandle
+- `api.path_createsysfile(filename, path_id, filetype)` - Create new file, returns filehandle
+- `api.path_closesysfile(filehandle)` - Close open file
+- `api.sysfile_read(filehandle, count)` - Read bytes from file
+- `api.sysfile_write(filehandle, data)` - Write string to file, returns bytes written
+- `api.sysfile_geteof(filehandle)` - Get end-of-file position
+- `api.sysfile_seteof(filehandle, pos)` - Set end-of-file position
+- `api.sysfile_getpos(filehandle)` - Get current file position
+- `api.sysfile_setpos(filehandle, pos, mode)` - Set file position
+- `api.sysfile_readtextfile(filehandle, maxsize)` - Read entire text file
+- `api.path_deletefile(filename, path_id)` - Delete a file
+
+### Database API (SQLite Database)
+- `api.Database()` - Create empty database wrapper
+- `db:open(name, filepath)` - Open or create database
+- `db:close()` - Close database
+- `db:query(sql)` - Execute SQL query, returns DBResult
+- `db:transaction_start()` - Begin transaction
+- `db:transaction_end()` - Commit transaction
+- `db:transaction_flush()` - Force flush all transactions
+- `db:get_last_insert_id()` - Get ID of last INSERT
+- `db:create_table(tablename)` - Create new table with primary key
+- `db:add_column(tablename, columnname, columntype, flags)` - Add column to table
+- `db:is_open()` - Check if database is open
+- `db:pointer()` - Get raw pointer value
+
+### DBResult API (Database Query Results)
+- `result:numrecords()` or `#result` - Get number of records
+- `result:numfields()` - Get number of fields
+- `result:fieldname(index)` - Get field name by index
+- `result:get_string(record, field)` - Get string value
+- `result:get_long(record, field)` - Get integer value
+- `result:get_float(record, field)` - Get float value
+- `result:get_record(index)` - Get entire record as table
+- `result:to_list()` - Convert all results to nested tables
+- `result:reset()` - Reset iterator to beginning
+- `result:clear()` - Clear the result
+
+### Hashtab API (Hash Table)
+- `api.Hashtab(slotcount)` - Create new hashtable with optional size
+- `hashtab:wrap(pointer)` - Wrap existing hashtable pointer
+- `hashtab:is_null()` - Check if hashtable is null
+- `hashtab:store(key, value)` - Store value by key
+- `hashtab:lookup(key, default)` - Get value by key with optional default
+- `hashtab:delete(key)` - Delete key
+- `hashtab:clear()` - Clear all entries
+- `hashtab:keys()` - Get array of all keys
+- `hashtab:has_key(key)` - Check if key exists
+- `hashtab:getsize()` or `#hashtab` - Get number of entries
+- `hashtab:pointer()` - Get raw pointer value
+- `hashtab[key]` - Get value by key (alternative syntax)
+- `hashtab[key] = value` - Set value by key (alternative syntax)
+
+### ITM API (Transport and Timing)
+- `api.ITM()` - Create ITM wrapper for global transport
+- `api.ITM(name)` - Create/get named ITM
+- `api.ITM(pointer)` - Wrap existing ITM pointer
+- `itm:getticks()` - Get current time in ticks
+- `itm:gettime()` - Get current time in milliseconds
+- `itm:getstate()` - Get transport state
+- `itm:tickstoms(ticks)` - Convert ticks to milliseconds
+- `itm:mstoticks(ms)` - Convert milliseconds to ticks
+- `itm:mstosamps(ms)` - Convert milliseconds to samples
+- `itm:sampstoms(samples)` - Convert samples to milliseconds
+- `itm:bbutoticsk(bars, beats, units)` - Convert bars/beats/units to ticks
+- `itm:tickstobbu(ticks)` - Convert ticks to {bars, beats, units}
+- `itm:pause()` - Pause transport
+- `itm:resume()` - Resume transport
+- `itm:seek(oldticks, newticks, chase)` - Seek to position
+- `itm:settimesignature(num, denom, flags)` - Set time signature
+- `itm:gettimesignature()` - Get time signature as {numerator, denominator}
+- `itm:dump()` - Dump ITM info to console
+- `itm:sync()` - Sync ITM
+- `itm:pointer()` - Get raw pointer value
+- `itm:is_valid()` - Check if ITM is valid
+- `api.itm_getglobal()` - Get global ITM pointer
+- `api.itm_setresolution(res)` - Set timing resolution
+- `api.itm_getresolution()` - Get timing resolution
+
+### Preset API (State Management)
+- `api.preset_store(format)` - Store preset data
+- `api.preset_set(object_ptr, value)` - Set preset value for object
+- `api.preset_int(object_ptr, value)` - Send preset int to object
+- `api.preset_get_data_symbol()` - Get preset data symbol name
+
+### Qelem API (Queue-based Deferred Execution)
+- `api.Qelem(callback, userdata)` - Create qelem with callback function
+- `qelem:set()` - Schedule qelem for execution
+- `qelem:unset()` - Cancel scheduled execution
+- `qelem:front()` - Execute qelem at front of queue
+- `qelem:is_set()` - Check if qelem is scheduled
+- `qelem:is_null()` - Check if qelem is null
+- `qelem:pointer()` - Get raw pointer value
+
+### Linklist API (Linked List Data Structure)
+- `api.Linklist()` - Create new linked list
+- `api.linklist_wrap(pointer)` - Wrap existing linklist pointer
+- `linklist:is_null()` - Check if linklist is null
+- `linklist:append(item_ptr)` - Append item to end, returns index
+- `linklist:insertindex(item_ptr, index)` - Insert item at index
+- `linklist:getindex(index)` - Get item pointer at index
+- `linklist:chuckindex(index)` - Remove item at index
+- `linklist:deleteindex(index)` - Alias for chuckindex
+- `linklist:clear()` - Clear all items
+- `linklist:getsize()` or `#linklist` - Get list size
+- `linklist:reverse()` - Reverse list order
+- `linklist:rotate(n)` - Rotate list by n positions
+- `linklist:shuffle()` - Randomly shuffle list
+- `linklist:swap(a, b)` - Swap items at indices a and b
+- `linklist[index]` - Get item at index (supports negative indices)
+- `linklist:pointer()` - Get raw pointer value
+
 ## Future Extensions
 
-All HIGH priority wrappers completed! See API_TODO.md for details on remaining wrappers:
-- **MEDIUM priority**: Object, Patcher, Inlet, Box, Patchline wrappers
-- **LOW priority**: Hashtab, Linklist, Qelem, Threading, Path, Time, and more
+All HIGH and MEDIUM priority wrappers completed! See API_TODO.md for details on remaining wrappers:
+- **LOW priority**: Threading (1 wrapper remaining)
 
 ## CMake Integration
 

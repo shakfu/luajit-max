@@ -140,7 +140,7 @@ This document tracks the remaining Max C-API wrappers to be implemented for the 
     - Full metatable support
   - Status: **COMPLETED** 2025-11-07
 
-- [ ] **api_box.h** - Box wrapper
+- [x] **api_box.h** - Box wrapper
   - Reference: `~/projects/pktpy/source/projects/pktpy/api/api_box.h`
   - Features needed:
     - Get/set box rect
@@ -151,32 +151,45 @@ This document tracks the remaining Max C-API wrappers to be implemented for the 
 
 ### 💭 Low Priority (Advanced Features)
 
-- [ ] **api_hashtab.h** - Hashtable wrapper
+- [x] **api_hashtab.h** - Hashtable wrapper ✅ COMPLETED
   - Reference: `~/projects/pktpy/source/projects/pktpy/api/api_hashtab.h`
-  - Features needed:
-    - Create/destroy hashtab
-    - Store/lookup/delete
-    - Key enumeration
-    - Iteration
-  - Priority: **LOW** (Dictionary covers most use cases)
+  - Implemented features:
+    - Create hashtable with optional size
+    - Wrap existing hashtable pointer
+    - store(key, value) and lookup(key, default) operations
+    - delete(key), clear(), keys() operations
+    - has_key(key), getsize() queries
+    - hashtab[key] syntax for get/set
+    - Full metatable support with __len, __index, __newindex
+    - Automatic type detection for stored values
+  - Status: **COMPLETED** 2025-11-07
+  - Note: Dictionary is still preferred for general use, but Hashtab provides direct access to Max's native hashtable API
 
-- [ ] **api_linklist.h** - Linked list wrapper
+- [x] **api_linklist.h** - Linked list wrapper ✅ COMPLETED
   - Reference: `~/projects/pktpy/source/projects/pktpy/api/api_linklist.h`
-  - Features needed:
-    - Create/destroy linklist
-    - Append/insert operations
-    - Index access
-    - Iteration
-    - Reverse/rotate/shuffle
-  - Priority: **LOW** (Lua tables are more idiomatic)
+  - Implemented features:
+    - Create linklist with Linklist() constructor
+    - Wrap existing linklist pointer with linklist_wrap()
+    - Append/insert operations: append(), insertindex()
+    - Index access: getindex(), linklist[index] with negative indices
+    - Remove operations: chuckindex(), deleteindex(), clear()
+    - List manipulation: reverse(), rotate(), shuffle(), swap()
+    - Size queries: getsize(), __len metamethod
+    - Full metatable support with __gc, __tostring, __index
+  - Status: **COMPLETED** 2025-11-07
+  - Note: While Lua tables are more idiomatic, this provides direct access to Max's native linklist API for interoperability with Max objects
 
-- [ ] **api_qelem.h** - Queue element wrapper
+- [x] **api_qelem.h** - Queue element wrapper ✅ COMPLETED
   - Reference: `~/projects/pktpy/source/projects/pktpy/api/api_qelem.h`
-  - Features needed:
-    - Create qelem with callback
-    - Set/unset/front operations
-    - Queue-based deferred execution
-  - Priority: **LOW** (Clock covers most scheduling needs)
+  - Implemented features:
+    - Create qelem with Lua callback and optional userdata
+    - set(), unset(), front() operations
+    - Queue-based deferred execution in main thread
+    - Automatic callback reference management via Lua registry
+    - is_set(), is_null() state queries
+    - Full metatable support with __gc cleanup
+  - Status: **COMPLETED** 2025-11-07
+  - Note: Provides queue-based deferred execution for UI updates, complementing Clock's timer-based scheduling
 
 - [ ] **api_systhread.h** - Threading wrapper
   - Reference: `~/projects/pktpy/source/projects/pktpy/api/api_systhread.h`
@@ -187,39 +200,62 @@ This document tracks the remaining Max C-API wrappers to be implemented for the 
     - Sleep operations
   - Priority: **LOW** (Threading from Lua is complex and risky)
 
-- [ ] **api_path.h** - File path utilities
+- [x] **api_path.h** - File path utilities ✅ COMPLETED
   - Reference: `~/projects/pktpy/source/projects/pktpy/api/api_path.h`
-  - Features needed:
-    - Path resolution
-    - File location (locatefile_extended)
-    - Path conversion (absolute/relative)
-    - File I/O helpers
-  - Priority: **LOW** (Lua has built-in file I/O)
+  - Implemented features:
+    - path_getdefault(), path_setdefault(), path_getapppath()
+    - locatefile_extended() for finding files in Max search paths
+    - path_toabsolutesystempath() for path conversion
+    - path_nameconform() for path style conversion
+    - File operations: path_opensysfile(), path_createsysfile(), path_closesysfile()
+    - Low-level I/O: sysfile_read(), sysfile_write()
+    - File positioning: sysfile_getpos(), sysfile_setpos(), sysfile_geteof(), sysfile_seteof()
+    - sysfile_readtextfile() for reading entire text files
+    - path_deletefile() for file deletion
+  - Status: **COMPLETED** 2025-11-07
+  - Note: Provides Max-specific file operations beyond Lua's built-in I/O
 
-- [ ] **api_time.h** - ITM (time object) wrapper
+- [x] **api_time.h** - ITM (time object) wrapper ✅ COMPLETED
   - Reference: `~/projects/pktpy/source/projects/pktpy/api/api_time.h`
-  - Features needed:
-    - Get transport time
-    - Ticks/ms/samples conversion
-    - Time signature
-    - Tempo sync
-  - Priority: **LOW** (advanced timing features)
+  - Implemented features:
+    - ITM creation: ITM() for global, ITM(name) for named, ITM(ptr) to wrap
+    - Time queries: getticks(), gettime(), getstate()
+    - Time conversions: tickstoms(), mstoticks(), mstosamps(), sampstoms()
+    - BBU (bars/beats/units) support: bbutoticsk(), tickstobbu()
+    - Transport control: pause(), resume(), seek()
+    - Time signature: settimesignature(), gettimesignature()
+    - Utilities: dump(), sync(), pointer(), is_valid()
+    - Module functions: itm_getglobal(), itm_setresolution(), itm_getresolution()
+    - Full metatable support with ownership tracking
+  - Status: **COMPLETED** 2025-11-07
+  - Note: Provides tempo-aware timing beyond basic Clock, essential for musical timing
 
-- [ ] **api_preset.h** - Preset system integration
+- [x] **api_preset.h** - Preset system integration ✅ COMPLETED
   - Reference: `~/projects/pktpy/source/projects/pktpy/api/api_preset.h`
-  - Features needed:
-    - Store/recall presets
-    - Preset interpolation
-  - Priority: **LOW** (specialized use case)
+  - Implemented features:
+    - preset_store(format) to store preset data
+    - preset_set(object_ptr, value) to set preset value for object
+    - preset_int(object_ptr, value) to send preset int to object
+    - preset_get_data_symbol() to get preset data symbol name
+    - Module-level functions only (no class wrapper needed)
+  - Status: **COMPLETED** 2025-11-07
+  - Note: Provides integration with Max's preset system for state management
 
-- [ ] **api_database.h** - SQLite database wrapper
+- [x] **api_database.h** - SQLite database wrapper ✅ COMPLETED
   - Reference: `~/projects/pktpy/source/projects/pktpy/api/api_database.h`
-  - Features needed:
-    - Open/close database
-    - Query execution
-    - Result iteration
-    - Transaction support
-  - Priority: **LOW** (specialized use case)
+  - Implemented features:
+    - Database type: open(), close(), is_open()
+    - Query execution: query() returns DBResult
+    - Transaction support: transaction_start(), transaction_end(), transaction_flush()
+    - Table operations: create_table(), add_column()
+    - get_last_insert_id() for INSERT operations
+    - DBResult type: numrecords(), numfields(), fieldname()
+    - Data access: get_string(), get_long(), get_float(), get_record()
+    - to_list() for converting results to Lua tables
+    - reset(), clear() for result management
+    - Full metatable support with __len for DBResult
+  - Status: **COMPLETED** 2025-11-07
+  - Note: Provides full SQLite integration via Max's database API
 
 ---
 
@@ -295,20 +331,23 @@ static void register_name_type(lua_State* L) {
 ## Progress Tracking
 
 ### Statistics
-- **Completed:** 13 wrappers (Symbol, Atom, Clock, Outlet, Table, AtomArray, Buffer, Dictionary, Object, Patcher, Inlet, Box)
+- **Completed:** 21 wrappers (Symbol, Atom, Clock, Outlet, Table, AtomArray, Buffer, Dictionary, Object, Patcher, Inlet, Box, Patchline, Path, Database, Hashtab, ITM, Preset, Qelem, Linklist)
 - **High Priority:** ✅ ALL 3 COMPLETED (AtomArray, Buffer, Dictionary)
-- **Medium Priority:** 4 of 5 completed (Object ✅, Patcher ✅, Inlet ✅, Box ✅)
-- **Low Priority:** 10 wrappers remaining
+- **Medium Priority:** ✅ ALL 5 COMPLETED (Object, Patcher, Inlet, Box, Patchline)
+- **Low Priority:** 7 of 10 completed (Path ✅, Database ✅, Hashtab ✅, ITM ✅, Preset ✅, Qelem ✅, Linklist ✅)
 - **Total Planned:** 24 wrappers
-- **Completion:** 54% (13/24 wrappers completed)
+- **Completion:** 88% (21/24 wrappers completed)
 
 ### Current Focus
-All HIGH priority wrappers completed! MEDIUM priority nearly done:
-1. ✅ **api_object.h** - Generic Max object wrapper (COMPLETED)
-2. ✅ **api_patcher.h** - Patcher manipulation (COMPLETED)
-3. ✅ **api_inlet.h** - Inlet operations (COMPLETED)
-4. ✅ **api_box.h** - Box wrapper (COMPLETED)
-5. **api_patchline.h** - Connection wrapper (LAST MEDIUM priority)
+All HIGH and MEDIUM priority wrappers completed! LOW priority progress:
+1. ✅ **api_path.h** - File path utilities (COMPLETED)
+2. ✅ **api_database.h** - SQLite database (COMPLETED)
+3. ✅ **api_hashtab.h** - Hash table (COMPLETED)
+4. ✅ **api_time.h** - ITM transport and timing (COMPLETED)
+5. ✅ **api_preset.h** - Preset system integration (COMPLETED)
+6. ✅ **api_qelem.h** - Queue-based deferred execution (COMPLETED)
+7. ✅ **api_linklist.h** - Linked list data structure (COMPLETED)
+8. **Remaining LOW priority:** Threading (3 wrappers remaining)
 
 ---
 

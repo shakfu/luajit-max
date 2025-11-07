@@ -12,6 +12,11 @@
 #include "jpatcher_api.h"
 #include "ext_hashtab.h"
 #include "ext_linklist.h"
+#include "ext_path.h"
+#include "ext_sysfile.h"
+#include "ext_database.h"
+#include "ext_itm.h"
+#include "ext_proto.h"
 
 // Lua includes
 #include <lua.h>

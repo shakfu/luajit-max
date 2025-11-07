@@ -240,4 +240,158 @@ static void register_outlet_type(lua_State* L) {
     lua_pop(L, 1);  // Pop api table
 }
 
+//-----------------------------------------------------------------------------------------------
+// OutletWrapper - Lightweight wrapper for injected outlets
+//-----------------------------------------------------------------------------------------------
+
+#define OUTLET_WRAPPER_MT "api.OutletWrapper"
+
+// OutletWrapper methods (simpler than full Outlet, just wraps pointer)
+
+static int OutletWrapper_bang(lua_State* L) {
+    void** outlet_ptr = (void**)luaL_checkudata(L, 1, OUTLET_WRAPPER_MT);
+    if (*outlet_ptr == NULL) {
+        return luaL_error(L, "Outlet is null");
+    }
+    outlet_bang((t_outlet*)*outlet_ptr);
+    return 0;
+}
+
+static int OutletWrapper_int(lua_State* L) {
+    void** outlet_ptr = (void**)luaL_checkudata(L, 1, OUTLET_WRAPPER_MT);
+    if (*outlet_ptr == NULL) {
+        return luaL_error(L, "Outlet is null");
+    }
+    t_atom_long value = (t_atom_long)luaL_checknumber(L, 2);
+    outlet_int((t_outlet*)*outlet_ptr, value);
+    return 0;
+}
+
+static int OutletWrapper_float(lua_State* L) {
+    void** outlet_ptr = (void**)luaL_checkudata(L, 1, OUTLET_WRAPPER_MT);
+    if (*outlet_ptr == NULL) {
+        return luaL_error(L, "Outlet is null");
+    }
+    double value = luaL_checknumber(L, 2);
+    outlet_float((t_outlet*)*outlet_ptr, value);
+    return 0;
+}
+
+static int OutletWrapper_symbol(lua_State* L) {
+    void** outlet_ptr = (void**)luaL_checkudata(L, 1, OUTLET_WRAPPER_MT);
+    if (*outlet_ptr == NULL) {
+        return luaL_error(L, "Outlet is null");
+    }
+    const char* str = luaL_checkstring(L, 2);
+    t_symbol* sym = gensym(str);
+    outlet_anything((t_outlet*)*outlet_ptr, sym, 0, NULL);
+    return 0;
+}
+
+static int OutletWrapper_list(lua_State* L) {
+    void** outlet_ptr = (void**)luaL_checkudata(L, 1, OUTLET_WRAPPER_MT);
+    if (*outlet_ptr == NULL) {
+        return luaL_error(L, "Outlet is null");
+    }
+
+    luaL_checktype(L, 2, LUA_TTABLE);
+
+    // Convert Lua table to atom array
+    long ac = (long)lua_objlen(L, 2);
+    t_atom* av = (t_atom*)sysmem_newptr(ac * sizeof(t_atom));
+
+    if (!av) {
+        return luaL_error(L, "Failed to allocate memory for atoms");
+    }
+
+    for (long i = 0; i < ac; i++) {
+        lua_rawgeti(L, 2, i + 1);
+        if (!lua_toatom(L, -1, &av[i])) {
+            sysmem_freeptr(av);
+            return luaL_error(L, "Table element %d is not a valid atom type", (int)(i + 1));
+        }
+        lua_pop(L, 1);
+    }
+
+    outlet_list((t_outlet*)*outlet_ptr, NULL, (short)ac, av);
+    sysmem_freeptr(av);
+
+    return 0;
+}
+
+static int OutletWrapper_anything(lua_State* L) {
+    void** outlet_ptr = (void**)luaL_checkudata(L, 1, OUTLET_WRAPPER_MT);
+    if (*outlet_ptr == NULL) {
+        return luaL_error(L, "Outlet is null");
+    }
+
+    const char* sym_str = luaL_checkstring(L, 2);
+    t_symbol* sym = gensym(sym_str);
+
+    luaL_checktype(L, 3, LUA_TTABLE);
+
+    // Convert Lua table to atom array
+    long ac = (long)lua_objlen(L, 3);
+    t_atom* av = (t_atom*)sysmem_newptr(ac * sizeof(t_atom));
+
+    if (!av) {
+        return luaL_error(L, "Failed to allocate memory for atoms");
+    }
+
+    for (long i = 0; i < ac; i++) {
+        lua_rawgeti(L, 3, i + 1);
+        if (!lua_toatom(L, -1, &av[i])) {
+            sysmem_freeptr(av);
+            return luaL_error(L, "Table element %d is not a valid atom type", (int)(i + 1));
+        }
+        lua_pop(L, 1);
+    }
+
+    outlet_anything((t_outlet*)*outlet_ptr, sym, (short)ac, av);
+    sysmem_freeptr(av);
+
+    return 0;
+}
+
+static int OutletWrapper_tostring(lua_State* L) {
+    void** outlet_ptr = (void**)luaL_checkudata(L, 1, OUTLET_WRAPPER_MT);
+    lua_pushfstring(L, "OutletWrapper(ptr=%p)", *outlet_ptr);
+    return 1;
+}
+
+// Register OutletWrapper type (called by luajit external during init)
+static void register_outlet_wrapper_type(lua_State* L) {
+    // Create metatable
+    luaL_newmetatable(L, OUTLET_WRAPPER_MT);
+
+    // Set __index to itself
+    lua_pushvalue(L, -1);
+    lua_setfield(L, -2, "__index");
+
+    // Register methods
+    lua_pushcfunction(L, OutletWrapper_bang);
+    lua_setfield(L, -2, "bang");
+
+    lua_pushcfunction(L, OutletWrapper_int);
+    lua_setfield(L, -2, "int");
+
+    lua_pushcfunction(L, OutletWrapper_float);
+    lua_setfield(L, -2, "float");
+
+    lua_pushcfunction(L, OutletWrapper_symbol);
+    lua_setfield(L, -2, "symbol");
+
+    lua_pushcfunction(L, OutletWrapper_list);
+    lua_setfield(L, -2, "list");
+
+    lua_pushcfunction(L, OutletWrapper_anything);
+    lua_setfield(L, -2, "anything");
+
+    // Register metamethods
+    lua_pushcfunction(L, OutletWrapper_tostring);
+    lua_setfield(L, -2, "__tostring");
+
+    lua_pop(L, 1);  // Pop metatable
+}
+
 #endif // LUAJIT_API_OUTLET_H
