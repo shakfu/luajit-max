@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
   - `CRITICAL_FIXES_SUMMARY.md` - Summary of critical fixes applied
 
 ### Changed
+- **Refactor luajit.stk~**: Moved binding code to a header
 - **Time-Based Parameters**: Delay function in `examples/dsp_stk.lua` now uses seconds instead of samples
   - p0 parameter is now in seconds (e.g., 0.05 = 50ms)
   - Automatically converts to samples using SAMPLE_RATE

@@ -2,6 +2,7 @@
 
 ROOT=`pwd`
 export MACOSX_DEPLOYMENT_TARGET="10.11"
+BRANCH="v2.1"
 
 # $1 NAME
 # $2 REPO
@@ -32,5 +33,5 @@ function build_external_make_dep() {
 
 build_external_make_dep \
 	luajit \
-	"--branch v2.1 https://github.com/LuaJIT/LuaJIT.git" \
+	"--branch ${BRANCH} https://github.com/LuaJIT/LuaJIT.git" \
 	-DCMAKE_POLICY_VERSION_MINIMUM=3.5

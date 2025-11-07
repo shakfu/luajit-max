@@ -14,7 +14,7 @@
 --
 -- SAMPLE_RATE is automatically set by the luajit.stk~ external
 -- based on Max's audio settings. Default shown here for reference only.
-SAMPLE_RATE = SAMPLE_RATE or 44100.0
+-- SAMPLE_RATE = SAMPLE_RATE or 44100.0
 
 
 function dump(o)
@@ -69,13 +69,15 @@ sine = function(x, fb, n, p0, p1, p2, p3)
 end
 
 
-local _delay = stk.Delay(441, 4096) -- (initial delay = 441 samples ~10ms, maxDelay = 4096)
-local _delay_last_out = 0  -- store last delay output for feedback
-local _delay_current_length = 441  -- track current delay length
-local _delay_debug_printed = false  -- debug flag
+-- Max delay time in secs (4096 samples / SAMPLE_RATE)
 
--- Max delay time in seconds (4096 samples / SAMPLE_RATE)
-local _delay_max_seconds = 4096 / SAMPLE_RATE
+local _delay_max_seconds = 4.0
+local _delay_max_samples = _delay_max_seconds * SAMPLE_RATE
+
+local _delay = stk.Delay(SAMPLE_RATE / 100, _delay_max_samples) -- (initial delay = 448 samples ~10ms, maxDelay = _delay_max_seconds * SAMPLE_RATE)
+local _delay_last_out = 0  -- store last delay output for feedback
+local _delay_current_length = SAMPLE_RATE / 100  -- track current delay length
+local _delay_debug_printed = false  -- debug flag
 
 delay = function(x, fb, n, p0, p1, p2, p3)
    -- p0: delay time in SECONDS (0.0 to ~0.093s at 44.1kHz)
@@ -90,13 +92,13 @@ delay = function(x, fb, n, p0, p1, p2, p3)
 
    -- Clamp to valid range
    if delay_samples < 0 then delay_samples = 0 end
-   if delay_samples > 4096 then delay_samples = 4096 end
+   if delay_samples > _delay_max_samples then delay_samples = _delay_max_samples end
 
    -- Debug output once
    if not _delay_debug_printed then
       api.post(string.format("SAMPLE_RATE: %.1f Hz", SAMPLE_RATE))
       api.post(string.format("Max delay: %.3f seconds (%d samples)",
-                             _delay_max_seconds, 4096))
+                             _delay_max_seconds, _delay_max_samples))
       api.post(string.format("Initial params: time=%.3fs, feedback=%.2f, mix=%.2f",
                              p0, p1, p2))
       _delay_debug_printed = true

@@ -2,6 +2,7 @@
 
 ROOT=`pwd`
 export MACOSX_DEPLOYMENT_TARGET="10.11"
+BRANCH="5.0.1"
 
 # $1 NAME
 # $2 REPO
@@ -32,6 +33,6 @@ function build_external_make_dep() {
 
 build_external_cmake_dep \
 	stk \
-	https://github.com/thestk/stk.git \
+	"--branch ${BRANCH} https://github.com/thestk/stk.git" \
 	-DENABLE_JACK=OFF
 
