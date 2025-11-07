@@ -14,6 +14,9 @@
 #include <libgen.h>
 #include <unistd.h>
 
+// Include the shared Max API module for Lua
+#include "luajit_api.h"
+
 #define USE_LUA 1
 
 
@@ -279,16 +282,8 @@ void mlj_init_lua(t_mlj *x)
     x->func_ref = LUA_NOREF;
     x->in_error_state = 0;
 
-    // Register Max API functions in 'api' module
-    lua_newtable(x->L);  // Create api table
-
-    lua_pushcfunction(x->L, lua_max_post);
-    lua_setfield(x->L, -2, "post");
-
-    lua_pushcfunction(x->L, lua_max_error);
-    lua_setfield(x->L, -2, "error");
-
-    lua_setglobal(x->L, "api");  // Set as global 'api' module
+    // Initialize the shared Max API module for Lua
+    luajit_api_init(x->L);
 
     mlj_run_file(x);
 

@@ -41,7 +41,7 @@ target_include_directories(${PROJECT_NAME}
     ${STK_INCLUDE}
     ${LUA_BRIDGE}
     ${LUAJIT_INCLUDE}
-
+    ${CMAKE_CURRENT_SOURCE_DIR}/../libapi
 )
 
 
