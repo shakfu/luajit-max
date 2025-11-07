@@ -1,23 +1,48 @@
 # luajit-max
 
-Includes two externals which both embed luajit in a Max/Msp external:
+A collection of Max/MSP externals that embed LuaJIT, enabling dynamic scripting for both audio processing and general Max object development.
 
-1. **luajit~**
+## Externals
 
-Embeds the luajit engine in a max/msp external's audio thread.
+### 1. **luajit**
 
-A number of basic dsp functions are implemented in `examples/dsp.lua` including some examples from [worp](https://github.com/zevv/worp).
+A general-purpose Max external for writing complete Max objects in Lua. Supports non-DSP message-based objects with dynamic inlet/outlet configuration.
 
-The dynamic nature of lua makes it possible to add, modify or change dsp functions on-the-fly. 
+**Features:**
+- Dynamic inlets and outlets (1-16 each, configured in Lua)
+- Message routing (bang, int, float, list, anything) to Lua functions
+- Text editor integration with hot reload
+- Lua module path configuration for `require()` statements
+- Access to Max API through `api` module (post, error, outlets, etc.)
 
-The help patch provides an example of this: functions can be changed and selected by name from the dropdown and the`dsp.lua` script can be changed and then reloaded by sending a bang to the luajit~ object even while the audio stream is active.
+**Example:** See `examples/simple_luajit.lua`, `examples/counter.lua`, `examples/math_ops.lua`
 
+### 2. **luajit~**
 
-2. **luajit.stk~**
+Embeds the LuaJIT engine in a Max/MSP external's audio thread for real-time DSP processing.
 
-Same as (1) but with the addition of c++ objects from the [Synthesis ToolKit (stk)](https://github.com/thestk/stk) library which are wrapped automatically using [LuaBridge3](https://github.com/kunitoki/LuaBridge3) and a custom python script.
+**Features:**
+- Real-time Lua DSP functions with per-sample or per-vector processing
+- On-the-fly function modification and hot reload
+- Automatic `SAMPLE_RATE` global variable
+- Function reference caching for RT performance
+- Protected execution with graceful error handling
 
-In this case, the relevant lua file loaded at start is called `dsp_stk.lua`. There's also another generated file, `dsp_stk_api.lua`, which includes reference and documentation for all wrapped stk lua functions.
+A number of basic DSP functions are implemented in `examples/dsp.lua` including examples from [worp](https://github.com/zevv/worp).
+
+The help patch demonstrates live coding: functions can be changed and selected by name, and the `dsp.lua` script can be reloaded by sending a bang to the object even while the audio stream is active.
+
+### 3. **luajit.stk~**
+
+Combines LuaJIT DSP with the [Synthesis ToolKit (STK)](https://github.com/thestk/stk) library. STK C++ objects are automatically wrapped using [LuaBridge3](https://github.com/kunitoki/LuaBridge3) and a custom Python parser.
+
+**Features:**
+- All features of `luajit~`
+- Access to STK synthesis and effects classes from Lua
+- Automatic C++ binding generation via header parsing
+- Generated API documentation in `examples/dsp_stk_api.lua`
+
+The relevant Lua file is `examples/dsp_stk.lua` which demonstrates STK integration.
 
 
 ## Installation
