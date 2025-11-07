@@ -1,4 +1,14 @@
 -- dsp.lua
+-- Example DSP functions for luajit~ external
+--
+-- FUNCTION SIGNATURE for luajit~:
+--   function name(x, fb, n, p1)
+--     x:  audio input (current sample)
+--     fb: feedback (previous output sample)
+--     n:  samples remaining in buffer
+--     p1: parameter from inlet (rightmost)
+--     return: output sample (must be a number)
+--
 ----------------------------------------------------------------------------------
 -- get path of containing folder and set it as package.path
 
@@ -17,7 +27,9 @@ package.path = package.path .. pkg_path
 require 'dsp_worp'
 require 'fun'
 
-SAMPLE_RATE = 44100.0
+-- SAMPLE_RATE is automatically set by the luajit~ external
+-- based on Max's audio settings. Default shown here for reference only.
+SAMPLE_RATE = SAMPLE_RATE or 44100.0
 
 
 ----------------------------------------------------------------------------------

@@ -96,11 +96,15 @@ typedef struct _lstk {
     lua_State *L;       // lua state
     t_symbol* filename; // filename of lua file in Max search path
     t_symbol* funcname; // name of lua dsp function to use
+    int func_ref;       // cached function reference in LUA_REGISTRYINDEX
     double param0;      // parameter 0 (leftmost)
     double param1;      // parameter 1
     double param2;      // parameter 2
     double param3;      // parameter 3 (rightmost)
-    double v1;          // historical value;
+    double prev_sample; // previous sample value (for feedback)
+    double samplerate;  // current sample rate
+    long vectorsize;    // current vector size
+    char in_error_state; // flag to indicate Lua error state
     long m_in;          // space for the inlet number used by all of the proxies
     void *inlets[MAX_INLET_INDEX];
 } t_lstk;
@@ -148,24 +152,74 @@ int run_lua_file(t_lstk *x, const char* path)
     return 0; 
 }
 
-float lua_dsp(t_lstk *x, float audio_in, float audio_prev, float n_samples, 
+float lua_dsp(t_lstk *x, float audio_in, float audio_prev, float n_samples,
                          float param0, float param1, float param2, float param3)
 {
-   lua_getglobal(x->L, x->funcname->s_name);
-   // core
+   // If in error state, return silence
+   if (x->in_error_state) {
+       return 0.0f;
+   }
+
+   // Get cached function reference
+   if (x->func_ref == LUA_REFNIL || x->func_ref == LUA_NOREF) {
+       x->in_error_state = 1;
+       error("luajit.stk~: no Lua function loaded");
+       return 0.0f;
+   }
+
+   lua_rawgeti(x->L, LUA_REGISTRYINDEX, x->func_ref);
+
+   // Verify it's still a function
+   if (!lua_isfunction(x->L, -1)) {
+       lua_pop(x->L, 1);
+       x->in_error_state = 1;
+       error("luajit.stk~: cached reference is not a function");
+       return 0.0f;
+   }
+
+   // Push arguments
    lua_pushnumber(x->L, audio_in);
    lua_pushnumber(x->L, audio_prev);
    lua_pushnumber(x->L, n_samples);
-   // params
    lua_pushnumber(x->L, param0);
    lua_pushnumber(x->L, param1);
    lua_pushnumber(x->L, param2);
    lua_pushnumber(x->L, param3);
-   // Call the function with 7 arguments, returning 1 result
-   lua_call(x->L, 7, 1);
+
+   // Call the function with 7 arguments, returning 1 result (protected call)
+   int status = lua_pcall(x->L, 7, 1, 0);
+
+   if (status != LUA_OK) {
+       const char* err_msg = lua_tostring(x->L, -1);
+       error("luajit.stk~: Lua error: %s", err_msg);
+       lua_pop(x->L, 1);
+       x->in_error_state = 1;
+       return 0.0f;
+   }
+
+   // Verify return value is a number
+   if (!lua_isnumber(x->L, -1)) {
+       error("luajit.stk~: Lua function must return a number");
+       lua_pop(x->L, 1);
+       x->in_error_state = 1;
+       return 0.0f;
+   }
+
    // Get the result
    float result = (float)lua_tonumber(x->L, -1);
    lua_pop(x->L, 1);
+
+   // Check for invalid values (NaN, Inf)
+   if (isnan(result) || isinf(result)) {
+       error("luajit.stk~: Lua returned invalid value (NaN or Inf)");
+       x->in_error_state = 1;
+       return 0.0f;
+   }
+
+   // Clamp to safe range to prevent clipping/damage
+   if (result > 1.0f) result = 1.0f;
+   if (result < -1.0f) result = -1.0f;
+
    return result;
 }
 
@@ -201,11 +255,31 @@ t_string* get_path_from_package(t_class* c, char* subpath)
 
     const char* ext_path_c = string_getptr(external_path);
 
-    result = string_new(dirname(dirname((char*)ext_path_c)));
+    // dirname() modifies its input, so we need to make a copy
+    char* path_copy = strdup(ext_path_c);
+    if (!path_copy) {
+        object_free(external_path);
+        return NULL;
+    }
+
+    char* dir1 = dirname(path_copy);
+    char* dir1_copy = strdup(dir1);
+    free(path_copy);
+
+    if (!dir1_copy) {
+        object_free(external_path);
+        return NULL;
+    }
+
+    char* dir2 = dirname(dir1_copy);
+    result = string_new(dir2);
+    free(dir1_copy);
 
     if (subpath != NULL) {
         string_append(result, subpath);
     }
+
+    object_free(external_path);  // Free the temporary path
 
     return result;
 }
@@ -236,19 +310,24 @@ void lstk_run_file(t_lstk *x)
 {
     if (x->filename != gensym("")) {
         char norm_path[MAX_PATH_CHARS];
-        path_nameconform(x->filename->s_name, norm_path, 
+        path_nameconform(x->filename->s_name, norm_path,
             PATH_STYLE_MAX, PATH_TYPE_BOOT);
         if (access(norm_path, F_OK) == 0) { // file exists in path
             post("run %s", norm_path);
             run_lua_file(x, norm_path);
         } else { // try in the example folder
             t_string* path = get_path_from_package(lstk_class, "/examples/");
+            if (!path) {
+                error("luajit.stk~: failed to get package path");
+                return;
+            }
             string_append(path, x->filename->s_name);
             const char* lua_file = string_getptr(path);
             post("run %s", lua_file);
             run_lua_file(x, lua_file);
+            object_free(path);  // Free the path string
         }
-    }    
+    }
 }
 
 
@@ -265,7 +344,11 @@ void *lstk_new(t_symbol *s, long argc, t_atom *argv)
         x->param1 = 0.0;
         x->param2 = 0.0;
         x->param3 = 0.0;
-        x->v1 = 0.0;
+        x->prev_sample = 0.0;
+        x->samplerate = 44100.0;
+        x->vectorsize = 64;
+        x->func_ref = LUA_NOREF;
+        x->in_error_state = 0;
         x->filename = atom_getsymarg(0, argc, argv); // 1st arg of object
         x->funcname = gensym("base");
         post("load: %s", x->filename->s_name);
@@ -283,10 +366,17 @@ void *lstk_new(t_symbol *s, long argc, t_atom *argv)
 
 void lstk_free(t_lstk *x)
 {
+    // Release cached function reference if it exists
+    if (x->func_ref != LUA_NOREF && x->func_ref != LUA_REFNIL) {
+        luaL_unref(x->L, LUA_REGISTRYINDEX, x->func_ref);
+    }
     lua_close(x->L);
     dsp_free((t_pxobject *)x);
     for(int i = (MAX_INLET_INDEX - 1); i > 0; i--) {
-        object_free(x->inlets[i]);
+        if (x->inlets[i]) {
+            object_free(x->inlets[i]);
+            x->inlets[i] = NULL;
+        }
     }
 }
 
@@ -303,15 +393,48 @@ void lstk_assist(t_lstk *x, void *b, long m, long a, char *s)
 
 void lstk_bang(t_lstk *x)
 {
+    // Release old function reference
+    if (x->func_ref != LUA_NOREF && x->func_ref != LUA_REFNIL) {
+        luaL_unref(x->L, LUA_REGISTRYINDEX, x->func_ref);
+        x->func_ref = LUA_NOREF;
+    }
+
     lstk_run_file(x);
+
+    // Re-cache the current function
+    lua_getglobal(x->L, x->funcname->s_name);
+    if (lua_isfunction(x->L, -1)) {
+        x->func_ref = luaL_ref(x->L, LUA_REGISTRYINDEX);
+        x->in_error_state = 0;
+        post("reloaded and cached function: %s", x->funcname->s_name);
+    } else {
+        lua_pop(x->L, 1);
+        error("function '%s' not found after reload", x->funcname->s_name);
+        x->in_error_state = 1;
+    }
 }
 
 void lstk_anything(t_lstk* x, t_symbol* s, long argc, t_atom* argv)
 {
-
     if (s != gensym("")) {
-        post("funcname: %s", s->s_name);
-        x->funcname = s;
+        // Release old function reference
+        if (x->func_ref != LUA_NOREF && x->func_ref != LUA_REFNIL) {
+            luaL_unref(x->L, LUA_REGISTRYINDEX, x->func_ref);
+        }
+
+        // Get the new function and cache its reference
+        lua_getglobal(x->L, s->s_name);
+        if (lua_isfunction(x->L, -1)) {
+            x->func_ref = luaL_ref(x->L, LUA_REGISTRYINDEX);
+            x->funcname = s;
+            x->in_error_state = 0;  // Clear error state on successful function change
+            post("funcname: %s", s->s_name);
+        } else {
+            lua_pop(x->L, 1);
+            error("'%s' is not a function", s->s_name);
+            x->func_ref = LUA_NOREF;
+            x->in_error_state = 1;
+        }
     }
 }
 
@@ -320,26 +443,19 @@ void lstk_float(t_lstk *x, double f)
 {
     switch (proxy_getinlet((t_object *)x)) {
         case 0:
-            post("received in inlet 0 (leftmost)");
             x->param0 = f;
-            post("param0: %f", x->param0);
             break;
         case 1:
-            post("received in inlet 1");
             x->param1 = f;
-            post("param1: %f", x->param1);
             break;
         case 2:
-            post("received in inlet 2");
             x->param2 = f;
-            post("param2: %f", x->param2);
             break;
         case 3:
-            post("received in inlet 3");
             x->param3 = f;
-            post("param3: %f", x->param3);
             break;
     }
+    // Removed post() - too noisy for RT parameter changes
 }
 
 
@@ -347,6 +463,14 @@ void lstk_dsp64(t_lstk *x, t_object *dsp64, short *count, double samplerate, lon
 {
     post("sample rate: %f", samplerate);
     post("maxvectorsize: %d", maxvectorsize);
+
+    // Store sample rate and vector size
+    x->samplerate = samplerate;
+    x->vectorsize = maxvectorsize;
+
+    // Update Lua global
+    lua_pushnumber(x->L, samplerate);
+    lua_setglobal(x->L, "SAMPLE_RATE");
 
     object_method(dsp64, gensym("dsp_add64"), x, lstk_perform64, 0, NULL);
 }
@@ -356,25 +480,71 @@ void lstk_perform64(t_lstk *x, t_object *dsp64, double **ins, long numins, doubl
 {
     t_double *inL = ins[0];     // we get audio for each inlet of the object from the **ins argument
     t_double *outL = outs[0];   // we get audio for each outlet of the object from the **outs argument
-    int n = sampleframes;       // n = 64
-    double v1 = x->v1;
+    int n = sampleframes;
+    double prev = x->prev_sample;
 
-    while (n--) {
-        v1 = lua_dsp(x, *inL++, v1, n, x->param0, x->param1, x->param2, x->param3);
-        *outL++ = v1;
+    // If in error state, output silence
+    if (x->in_error_state) {
+        while (n--) {
+            *outL++ = 0.0;
+        }
+        return;
     }
 
-    x->v1 = v1;
+    while (n--) {
+        prev = lua_dsp(x, *inL++, prev, n, x->param0, x->param1, x->param2, x->param3);
+        *outL++ = prev;
+    }
 
+    x->prev_sample = prev;
 }
 
+
+// Max API wrapper functions for Lua
+static int lua_max_post(lua_State* L) {
+    const char* msg = luaL_checkstring(L, 1);
+    post("%s", msg);
+    return 0;
+}
+
+static int lua_max_error(lua_State* L) {
+    const char* msg = luaL_checkstring(L, 1);
+    error("%s", msg);
+    return 0;
+}
 
 void lstk_init_lua(t_lstk *x)
 {
     x->L = luaL_newstate();
     luaL_openlibs(x->L);  /* opens the standard libraries */
 
-    luabridge::getGlobalNamespace(x->L)
+    // Configure LuaJIT for real-time use
+    // Stop the GC initially - we'll run it manually
+    lua_gc(x->L, LUA_GCSTOP, 0);
+
+    // Set initial sample rate (will be updated in dsp64)
+    x->samplerate = 44100.0;
+    lua_pushnumber(x->L, x->samplerate);
+    lua_setglobal(x->L, "SAMPLE_RATE");
+
+    // Initialize function reference to invalid
+    x->func_ref = LUA_NOREF;
+    x->in_error_state = 0;
+
+    // Register Max API functions in 'api' module
+    lua_newtable(x->L);  // Create api table
+
+    lua_pushcfunction(x->L, lua_max_post);
+    lua_setfield(x->L, -2, "post");
+
+    lua_pushcfunction(x->L, lua_max_error);
+    lua_setfield(x->L, -2, "error");
+
+    lua_setglobal(x->L, "api");  // Set as global 'api' module
+
+    // Wrap STK binding in try-catch to handle potential exceptions
+    try {
+        luabridge::getGlobalNamespace(x->L)
         .beginNamespace("stk")
             .beginClass <stk::ADSR> ("ADSR")
                 .addConstructor<void ()> ()
@@ -1236,7 +1406,20 @@ void lstk_init_lua(t_lstk *x)
                     luabridge::overload<stk::StkFrames&, unsigned int>(&stk::Wurley::tick))
             .endClass()
         .endNamespace();
+    } catch (std::exception& e) {
+        error("luajit.stk~: STK initialization error: %s", e.what());
+        x->in_error_state = 1;
+    } catch (...) {
+        error("luajit.stk~: Unknown STK initialization error");
+        x->in_error_state = 1;
+    }
 
     lstk_run_file(x);
+
+    // Restart GC in incremental mode with conservative settings
+    lua_gc(x->L, LUA_GCRESTART, 0);
+    // Set incremental GC: smaller steps, longer pauses between steps
+    lua_gc(x->L, LUA_GCSETPAUSE, 200);    // wait 2x memory before next GC
+    lua_gc(x->L, LUA_GCSETSTEPMUL, 100);  // slower collection
 }
 
