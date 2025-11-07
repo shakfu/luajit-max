@@ -18,10 +18,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ## [Unreleased]
 
 ### Added
+- **luajit External**: New general-purpose Max external for writing complete externals in Lua
+  - Dynamic inlet/outlet configuration (1-16 each)
+  - Message routing to Lua functions (bang, int, float, list, anything)
+  - Text editor integration with hot reload
+  - Lua module path configuration for `require()` statements
+  - Supports writing non-DSP Max objects entirely in Lua
 - **SAMPLE_RATE Global Variable**: Both externals now automatically set `SAMPLE_RATE` global in Lua with current audio sample rate
 - **Max API Module**: New `api` module exposes Max console functions to Lua
   - `api.post(message)` - Post message to Max console
   - `api.error(message)` - Post error to Max console
+  - Outlet wrappers with methods: `bang()`, `int()`, `float()`, `symbol()`, `list()`, `anything()`
 - **Time Helper Utilities**: Created `examples/time_helpers.lua` with sample rate conversion functions
   - Time to samples: `ms_to_samples()`, `sec_to_samples()`
   - Samples to time: `samples_to_ms()`, `samples_to_sec()`
@@ -51,6 +58,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - **Delay Initialization**: Default delay increased from 9 samples to 441 samples (~10ms at 44.1kHz)
 
 ### Fixed
+- **luajit File Loading**: Fixed `locatefile_extended()` call to use correct FOURCC code and separate output/input type parameters
+  - Changed from incorrect `FOUR_CHAR_CODE('TEXT')` to correct `FOUR_CHAR_CODE('Jlua')` for Lua files
+  - Fixed parameter order: `outtype` (output) vs `filetype` (input typelist) now properly separated
+  - Files in `examples/` directory now load correctly from Max package
 - **Critical RT Safety**: Eliminated per-sample function name lookups
 - **Stack Corruption**: Added proper validation of function references and return values
 - **Memory Leaks**:
