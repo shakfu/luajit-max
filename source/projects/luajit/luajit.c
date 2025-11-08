@@ -8,7 +8,7 @@
     Features:
     - Dynamic inlets/outlets (1-16 each)
     - Message routing to Lua functions
-    - Text editor integration
+    - Text editor integration (WIP)
     - Hot reload support
     - Lua module path configuration
     - Attribute system
@@ -154,8 +154,10 @@ void* luajit_new(t_symbol* s, long argc, t_atom* argv)
     // Default configuration
     x->num_inlets = 1;
     x->num_outlets = 1;
+
+    // text editor
     x->editor = NULL;
-    x->code_buffer = NULL;
+    x->code_buffer = (t_handle)sysmem_newhandle(0);
     x->code_size = 0;
     x->run_on_save = 0;
     x->run_on_close = 1;
@@ -510,10 +512,11 @@ void luajit_dblclick(t_luajit* x)
         object_attr_setchar(x->editor, gensym("visible"), 1);
     } else {
         // Create new editor
-        x->editor = object_new(CLASS_NOBOX, gensym("jed"), x, 0);
+        x->editor = (t_object*)object_new(CLASS_NOBOX, gensym("jed"), x, 0);
 
         // Load the script file content if we have a loaded script
         if (x->script_name != gensym("") && x->script_path[0] != 0) {
+            post("load buffer into editor");
             // Read the file
             luajit_doread(x, x->script_name, 0, NULL);
             // Set the text in editor
@@ -548,7 +551,7 @@ void luajit_edclose(t_luajit* x, char** text, long size)
         if (x->script_path[0] != 0) {
             t_filehandle fh;
             t_max_err err = path_createsysfile(x->script_filename, x->script_path_id,
-                                              'TEXT', &fh);
+                                              'Jlua', &fh);
             if (err == MAX_ERR_NONE) {
                 t_ptr_size write_size = (t_ptr_size)size;
                 sysfile_write(fh, &write_size, *x->code_buffer);
@@ -577,7 +580,7 @@ t_max_err luajit_edsave(t_luajit* x, char** text, long size)
         if (x->script_path[0] != 0) {
             t_filehandle fh;
             t_max_err err = path_createsysfile(x->script_filename, x->script_path_id,
-                                              'TEXT', &fh);
+                                              'Jlua', &fh);
             if (err == MAX_ERR_NONE) {
                 t_ptr_size write_size = (t_ptr_size)size;
                 sysfile_write(fh, &write_size, *x->code_buffer);
@@ -621,7 +624,7 @@ void luajit_doread(t_luajit* x, t_symbol* s, long argc, t_atom* argv)
         path = x->script_path_id;
     } else {
         t_fourcc outtype = 0;
-        t_fourcc filetype = FOUR_CHAR_CODE('TEXT');
+        t_fourcc filetype = FOUR_CHAR_CODE('Jlua');
         strncpy_zero(filename, s->s_name, MAX_PATH_CHARS);
         if (locatefile_extended(filename, &path, &outtype, &filetype, 1)) {
             error("luajit: can't find file: %s", s->s_name);
