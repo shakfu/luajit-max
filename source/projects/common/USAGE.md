@@ -7,8 +7,6 @@ This single-header library provides **complete** functionality for luajit-max ex
 - DSP callbacks (dsp64, perform64)
 - Named and positional parameter systems
 
-All previously separate modules (`lua_engine.c`, `max_helpers.c`) are now merged into this single header.
-
 ## Basic Usage
 
 ### 1. Include the header
@@ -16,8 +14,6 @@ All previously separate modules (`lua_engine.c`, `max_helpers.c`) are now merged
 ```c
 #include "luajit_external.h"
 ```
-
-**Note**: No need to include `lua_engine.h` or `max_helpers.h` separately - they are fully integrated.
 
 ### 2. Add luajit_engine pointer to your struct
 
