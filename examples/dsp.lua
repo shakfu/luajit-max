@@ -27,6 +27,18 @@ package.path = package.path .. pkg_path
 require 'dsp_worp'
 require 'fun'
 
+-- Try to load FFI DSP library (optional, fails gracefully if not available)
+local dsp_c
+local ffi_available = pcall(function()
+   dsp_c = require 'dsp_ffi'
+end)
+
+if ffi_available then
+   post("FFI DSP library loaded successfully")
+else
+   post("FFI DSP library not available (continuing without it)")
+end
+
 -- SAMPLE_RATE is automatically set by the luajit~ external
 -- based on Max's audio settings. Default shown here for reference only.
 SAMPLE_RATE = SAMPLE_RATE or 44100.0
@@ -346,6 +358,109 @@ oscillator_bank = function(x, fb, n, ...)
 
    local synth = (osc1 + osc2 + osc3)
    return synth * mix + x * (1 - mix)
+end
+
+----------------------------------------------------------------------------------
+-- FFI-based DSP functions (using optimized C code)
+-- These functions demonstrate calling C DSP functions via LuaJIT FFI
+----------------------------------------------------------------------------------
+
+if ffi_available then
+   -- Soft clipper using C function
+   -- Usage: "ffi_softclip drive 3.0 mix 0.7"
+   -- Parameters:
+   --   drive: saturation amount (1.0 = clean, 5.0 = heavy, default 2.0)
+   --   mix: dry/wet mix (0.0 = dry, 1.0 = wet, default 1.0)
+   ffi_softclip = function(x, fb, n, ...)
+      local drive = PARAMS.drive or 2.0
+      local mix = PARAMS.mix or 1.0
+
+      -- Call C function via FFI (much faster than Lua implementation)
+      local wet = dsp_c.soft_clip(x, drive)
+
+      -- Mix dry and wet
+      return wet * mix + x * (1.0 - mix)
+   end
+
+   -- Bit crusher using C function
+   -- Usage: "ffi_bitcrush bits 8 mix 0.5"
+   -- Parameters:
+   --   bits: bit depth (1-16, default 8)
+   --   mix: dry/wet mix (default 1.0)
+   ffi_bitcrush = function(x, fb, n, ...)
+      local bits = PARAMS.bits or 8
+      local mix = PARAMS.mix or 1.0
+
+      local wet = dsp_c.bit_crush(x, bits)
+      return wet * mix + x * (1.0 - mix)
+   end
+
+   -- Wavefolder using C function
+   -- Usage: "ffi_wavefold threshold 0.5 mix 0.8"
+   -- Parameters:
+   --   threshold: folding threshold (0.1 - 1.0, default 0.5)
+   --   mix: dry/wet mix (default 1.0)
+   ffi_wavefold = function(x, fb, n, ...)
+      local threshold = PARAMS.threshold or 0.5
+      local mix = PARAMS.mix or 1.0
+
+      local wet = dsp_c.wavefold(x, threshold)
+      return wet * mix + x * (1.0 - mix)
+   end
+
+   -- Low-pass filter using C function
+   -- Usage: "ffi_lpf cutoff 0.3 mix 1.0"
+   -- Parameters:
+   --   cutoff: filter cutoff (0.0 = max filtering, 1.0 = no filtering, default 0.5)
+   --   mix: dry/wet mix (default 1.0)
+   ffi_lpf = function(x, fb, n, ...)
+      local cutoff = PARAMS.cutoff or 0.5
+      local mix = PARAMS.mix or 1.0
+
+      -- Use feedback parameter (fb) as previous output
+      local wet = dsp_c.lpf_1pole(x, fb, cutoff)
+      return wet * mix + x * (1.0 - mix)
+   end
+
+   -- Envelope follower using C function
+   -- Usage: "ffi_envelope attack 0.1 release 0.01"
+   -- Parameters:
+   --   attack: attack coefficient (0.0 - 1.0, higher = faster, default 0.1)
+   --   release: release coefficient (0.0 - 1.0, higher = faster, default 0.01)
+   ffi_envelope = function(x, fb, n, ...)
+      local attack = PARAMS.attack or 0.1
+      local release = PARAMS.release or 0.01
+
+      -- Get absolute value for envelope detection
+      local rectified = math.abs(x)
+
+      -- Use feedback parameter as previous envelope value
+      local envelope = dsp_c.envelope_follow(rectified, fb, attack, release)
+
+      -- Return envelope value (can be used to modulate other parameters)
+      return envelope
+   end
+else
+   -- Define stub functions if FFI is not available
+   ffi_softclip = function(x, fb, n, ...)
+      return x
+   end
+
+   ffi_bitcrush = function(x, fb, n, ...)
+      return x
+   end
+
+   ffi_wavefold = function(x, fb, n, ...)
+      return x
+   end
+
+   ffi_lpf = function(x, fb, n, ...)
+      return x
+   end
+
+   ffi_envelope = function(x, fb, n, ...)
+      return math.abs(x) * 0.1 -- Simple fallback
+   end
 end
 
 

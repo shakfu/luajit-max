@@ -26,11 +26,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
   - **Combined Syntax**: Switch function and set parameters in one message (e.g., `lpf_gain_mix gain 0.8 cutoff 0.6 mix 1.0`)
   - **Backward Compatible**: Legacy single/4-parameter functions continue to work
   - See `source/notes/dynamic_parameters.md` for complete documentation
+- **FFI Integration**: LuaJIT Foreign Function Interface support for calling optimized C code
+  - **libdsp Shared Library**: C library with optimized DSP functions (`support/libdsp.dylib`)
+  - **FFI Wrapper Module**: `examples/dsp_ffi.lua` declares C function signatures and loads library
+  - **FFI-based DSP Functions**: Example functions in `examples/dsp.lua` demonstrating FFI usage
+    - `ffi_softclip`: Soft clipping/saturation (drive, mix parameters)
+    - `ffi_bitcrush`: Bit depth reduction (bits, mix parameters)
+    - `ffi_wavefold`: Wave folding distortion (threshold, mix parameters)
+    - `ffi_lpf`: One-pole low-pass filter (cutoff, mix parameters)
+    - `ffi_envelope`: Envelope follower (attack, release parameters)
+  - **C DSP Functions in libdsp**: Optimized implementations for native-speed execution
+    - `soft_clip()`, `hard_clip()` - Clipping and saturation
+    - `bit_crush()` - Bit depth reduction
+    - `wavefold()` - Wave folding distortion
+    - `lpf_1pole()`, `hpf_1pole()` - One-pole filters
+    - `envelope_follow()` - Envelope detection
+    - `ring_mod()` - Ring modulation
+    - `lerp()` - Linear interpolation
+    - `clamp()` - Range limiting
+    - Plus scaling functions: `scale_linear()`, `scale_sine1/2()`, `scale_exp1/2()`, `scale_log1/2()`
+  - **Performance**: C functions run at native speed, LuaJIT can inline FFI calls
+  - **Extensibility**: Add DSP functions without recompiling externals
+  - **Max Package Integration**: Library built to `support/` directory (Max standard location)
+  - **Automatic Loading**: Max includes `support/` in library search path, enabling `ffi.load("libdsp")`
+  - **Graceful Fallback**: FFI functions degrade gracefully if library not available
+  - See `source/notes/ffi_dsp_functions.md` for complete documentation
 - **Example DSP Functions**: New practical examples demonstrating parameter handling
   - `waveshape`: Soft-clipping waveshaper with variable parameters (1-3: gain, drive, mix)
   - `lpf_gain_mix`: One-pole low-pass filter using named parameters (gain, cutoff, mix)
   - `delay`: Proper delay with circular buffer (time, feedback, mix parameters)
   - `hybrid_filter`: Demonstrates both positional and named parameter support
+  - `oscillator_bank`: Multi-oscillator example with many parameters
 - **luajit External**: New general-purpose Max external for writing complete externals in Lua
   - Dynamic inlet/outlet configuration (1-16 each)
   - Message routing to Lua functions (bang, int, float, list, anything)
@@ -64,6 +90,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
   - `mlj_list()` and `lstk_list()` handlers detect and route positional vs named parameters
   - `mlj_anything()` and `lstk_anything()` now support combined function+parameter syntax
 - **PARAMS Global Initialization**: Added `PARAMS = PARAMS or {}` to `examples/dsp.lua` for safe initialization
+- **Build System - libdsp**: Created CMakeLists.txt for libdsp shared library
+  - Outputs directly to `support/libdsp.dylib` (no subdirectories)
+  - Configuration-specific output directories explicitly set (Debug, Release)
+  - Links with math library (m)
+  - Integrated into main build process via root CMakeLists.txt
 - **Refactor luajit.stk~**: Moved binding code to a header
 - **Time-Based Parameters**: Delay function in `examples/dsp_stk.lua` now uses seconds instead of samples
   - p0 parameter is now in seconds (e.g., 0.05 = 50ms)
