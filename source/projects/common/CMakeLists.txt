@@ -14,42 +14,28 @@ set(MAX_SDK_BASE ${CMAKE_CURRENT_SOURCE_DIR}/../../max-sdk-base)
 set(MAX_SDK_INCLUDES "${MAX_SDK_BASE}/c74support/max-includes")
 set(MAX_SDK_MSP_INCLUDES "${MAX_SDK_BASE}/c74support/msp-includes")
 
-# Source files for common library
-set(COMMON_SOURCES
-    lua_engine.c
-    max_helpers.c
-)
-
+# Header-only library - single-header luajit_external.h
 set(COMMON_HEADERS
-    lua_engine.h
-    max_helpers.h
+    luajit_external.h
+    luajit_api.h
 )
 
-# Create static library
-add_library(luajit_common STATIC
-    ${COMMON_SOURCES}
-    ${COMMON_HEADERS}
-)
+# Create interface library (header-only)
+add_library(luajit_common INTERFACE)
 
-# Include directories
+# Include directories for interface library
 target_include_directories(luajit_common
-    PUBLIC
+    INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${LUAJIT_INCLUDE}
     ${MAX_SDK_INCLUDES}
     ${MAX_SDK_MSP_INCLUDES}
 )
 
-# Link LuaJIT
+# Link LuaJIT for interface library
 target_link_libraries(luajit_common
-    PUBLIC
+    INTERFACE
     ${LUAJIT_LIB}
-)
-
-# Set C standard
-set_target_properties(luajit_common PROPERTIES
-    C_STANDARD 99
-    C_STANDARD_REQUIRED ON
 )
 
 MESSAGE("Common library configured")

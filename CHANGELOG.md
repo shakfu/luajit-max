@@ -18,6 +18,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ## [Unreleased]
 
 ### Added
+- **Oscillator Functions in libdsp**: Added band-limited oscillator implementations
+  - Basic waveforms: `osc_sine()`, `osc_saw()`, `osc_square()`, `osc_triangle()`
+  - Band-limited versions: `osc_saw_bl()`, `osc_square_bl()` using polyBLEP anti-aliasing
+  - Helper functions: `osc_phase_inc()`, `osc_phase_wrap()` for phase management
+  - Declared in `examples/dsp_ffi.lua` for FFI access
+  - Example usage in `examples/dsp.lua` demonstrating oscillator usage
 - **Dynamic Parameter System**: Flexible parameter handling for both `luajit~` and `luajit.stk~`
   - **Up to 32 Parameters**: Increased from fixed 1/4 parameters to dynamic array of 32 parameters
   - **Positional Parameters**: Send numeric lists (e.g., `0.5 2.0 0.7`) for quick parameter updates
@@ -84,6 +90,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
   - `CRITICAL_FIXES_SUMMARY.md` - Summary of critical fixes applied
 
 ### Changed
+- **Code Consolidation**: Merged common code into single-header library
+  - Created `source/projects/common/luajit_external.h` single-header library
+  - Merged `lua_engine.c` and `max_helpers.c` implementations into header as `static inline` functions
+  - Converted `luajit_common` from STATIC library to INTERFACE library (header-only)
+  - Removed separate `#include "lua_engine.h"` and `#include "max_helpers.h"` from externals
+  - Reduced `luajit~.c` from 331 to 172 lines (48% reduction)
+  - Reduced `luajit.stk~.cpp` from 412 to 270 lines (34% reduction)
+  - Updated `USAGE.md` to reflect complete single-header implementation
 - **Parameter Handling Architecture**: Complete overhaul of parameter system
   - Both externals now use `lua_engine_call_dsp_dynamic()` for flexible parameter passing
   - Added `lua_engine_set_named_param()` and `lua_engine_clear_named_params()` functions
@@ -108,6 +122,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - **Delay Initialization**: Default delay increased from 9 samples to 441 samples (~10ms at 44.1kHz)
 
 ### Fixed
+- **Critical Thread Safety Issues**: Fixed race conditions and concurrent access bugs
+  - **Initialization Order**: Moved Lua file loading to after filename is set in `mlj_new()` and `lstk_new()`
+  - **Function Reference Race Condition**: Cache new function before releasing old reference during function switching
+  - **Lua State Thread Safety**: Set `in_error_state = 1` before accessing Lua state from main thread during function switches
+  - Prevents audio thread from executing Lua code while main thread modifies the Lua state
+  - Eliminates crashes at bytecode instructions (e.g., `lj_BC_GGET`) during concurrent access
+  - Brief audio silence during function switches is intentional for thread safety
+- **libdsp Install Name**: Fixed dynamic library install name to `libdsp.dylib` (no path prefix)
+  - Changed from `@rpath/libdsp.dylib` to simple `libdsp.dylib`
+  - Allows dynamic linker to search standard locations
+  - Added post-build `install_name_tool` command in CMakeLists.txt
 - **luajit File Loading**: Fixed `locatefile_extended()` call to use correct FOURCC code and separate output/input type parameters
   - Changed from incorrect `FOUR_CHAR_CODE('TEXT')` to correct `FOUR_CHAR_CODE('Jlua')` for Lua files
   - Fixed parameter order: `outtype` (output) vs `filetype` (input typelist) now properly separated
