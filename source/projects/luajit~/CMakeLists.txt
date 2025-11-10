@@ -36,12 +36,14 @@ target_include_directories(${PROJECT_NAME}
     PUBLIC
     ${LUAJIT_INCLUDE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../libapi
+    ${CMAKE_CURRENT_SOURCE_DIR}/../common
 )
 
 
 target_link_libraries(${PROJECT_NAME}
     PUBLIC
     ${LUAJIT_LIB}
+    luajit_common
 )
 
 

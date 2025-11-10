@@ -4,6 +4,7 @@
 */
 
 #include <cstdlib>
+#include <cctype>
 
 #include "stk_bindings.h"  // STK bindings (includes lua.hpp, LuaBridge, and all STK headers)
 
@@ -11,16 +12,18 @@
 #include "ext_obex.h"
 #include "z_dsp.h"
 
-#include <libgen.h>
-#include <unistd.h>
-
-// Include the shared Max API module for Lua
+// Shared libraries
 extern "C" {
+#include "lua_engine.h"
+#include "max_helpers.h"
 #include "luajit_api.h"
 }
 
+// Maximum number of dynamic parameters
+#define MAX_PARAMS 32
+
 enum {
-    PARAM0 = 0, 
+    PARAM0 = 0,
     PARAM1,
     PARAM2,
     PARAM3,
@@ -29,20 +32,22 @@ enum {
 
 // struct to represent the object's state
 typedef struct _lstk {
-    t_pxobject ob;      // the object itself (t_pxobject in MSP instead of t_object)
-    lua_State *L;       // lua state
-    t_symbol* filename; // filename of lua file in Max search path
-    t_symbol* funcname; // name of lua dsp function to use
-    int func_ref;       // cached function reference in LUA_REGISTRYINDEX
-    double param0;      // parameter 0 (leftmost)
-    double param1;      // parameter 1
-    double param2;      // parameter 2
-    double param3;      // parameter 3 (rightmost)
-    double prev_sample; // previous sample value (for feedback)
-    double samplerate;  // current sample rate
-    long vectorsize;    // current vector size
-    char in_error_state; // flag to indicate Lua error state
-    long m_in;          // space for the inlet number used by all of the proxies
+    t_pxobject ob;           // the object itself (t_pxobject in MSP instead of t_object)
+    lua_State *L;            // lua state
+    t_symbol* filename;      // filename of lua file in Max search path
+    t_symbol* funcname;      // name of lua dsp function to use
+    int func_ref;            // cached function reference in LUA_REGISTRYINDEX
+    double param0;           // parameter 0 (leftmost) - legacy support
+    double param1;           // parameter 1 - legacy support
+    double param2;           // parameter 2 - legacy support
+    double param3;           // parameter 3 (rightmost) - legacy support
+    double params[MAX_PARAMS]; // dynamic parameter array
+    int num_params;          // number of active parameters
+    double prev_sample;      // previous sample value (for feedback)
+    double samplerate;       // current sample rate
+    long vectorsize;         // current vector size
+    char in_error_state;     // flag to indicate Lua error state
+    long m_in;               // space for the inlet number used by all of the proxies
     void *inlets[MAX_INLET_INDEX];
 } t_lstk;
 
@@ -54,11 +59,10 @@ void lstk_free(t_lstk *x);
 void lstk_assist(t_lstk* x, void* b, long io, long idx, char* s);
 void lstk_bang(t_lstk *x);
 void lstk_anything(t_lstk* x, t_symbol* s, long argc, t_atom* argv);
+void lstk_list(t_lstk* x, t_symbol* s, long argc, t_atom* argv);
 void lstk_float(t_lstk *x, double f);
 void lstk_dsp64(t_lstk *x, t_object *dsp64, short *count, double samplerate, long maxvectorsize, long flags);
 void lstk_perform64(t_lstk *x, t_object *dsp64, double **ins, long numins, double **outs, long numouts, long sampleframes, long flags, void *userparam);
-
-t_string* get_path_from_package(t_class* c, char* subpath);
 
 // global class pointer variable
 static t_class *lstk_class = NULL;
@@ -66,172 +70,24 @@ static t_class *lstk_class = NULL;
 
 //-----------------------------------------------------------------------------------------------
 
-
-int run_lua_string(t_lstk *x, const char* code)
-{
-    int err;
-    err = luaL_dostring(x->L, code);
-    if (err) {
-        error("%s", lua_tostring(x->L, -1));
-        lua_pop(x->L, 1);  /* pop error message from the stack */
-    }
-    return 0; 
+// Adapter for mxh_load_lua_file
+static int load_lua_file_adapter(void* context, const char* path) {
+    t_lstk* x = (t_lstk*)context;
+    return lua_engine_run_file(x->L, path);
 }
 
-int run_lua_file(t_lstk *x, const char* path)
-{
-    int err;
-    err = luaL_dofile(x->L, path);
-    if (err) {
-        error("%s", lua_tostring(x->L, -1));
-        lua_pop(x->L, 1);  /* pop error message from the stack */
-    }
-    return 0; 
-}
-
-float lua_dsp(t_lstk *x, float audio_in, float audio_prev, float n_samples,
-                         float param0, float param1, float param2, float param3)
-{
-   // If in error state, return silence
-   if (x->in_error_state) {
-       return 0.0f;
-   }
-
-   // Get cached function reference
-   if (x->func_ref == LUA_REFNIL || x->func_ref == LUA_NOREF) {
-       x->in_error_state = 1;
-       error("luajit.stk~: no Lua function loaded");
-       return 0.0f;
-   }
-
-   lua_rawgeti(x->L, LUA_REGISTRYINDEX, x->func_ref);
-
-   // Verify it's still a function
-   if (!lua_isfunction(x->L, -1)) {
-       lua_pop(x->L, 1);
-       x->in_error_state = 1;
-       error("luajit.stk~: cached reference is not a function");
-       return 0.0f;
-   }
-
-   // Push arguments
-   lua_pushnumber(x->L, audio_in);
-   lua_pushnumber(x->L, audio_prev);
-   lua_pushnumber(x->L, n_samples);
-   lua_pushnumber(x->L, param0);
-   lua_pushnumber(x->L, param1);
-   lua_pushnumber(x->L, param2);
-   lua_pushnumber(x->L, param3);
-
-   // Call the function with 7 arguments, returning 1 result (protected call)
-   int status = lua_pcall(x->L, 7, 1, 0);
-
-   if (status != LUA_OK) {
-       const char* err_msg = lua_tostring(x->L, -1);
-       error("luajit.stk~: Lua error: %s", err_msg);
-       lua_pop(x->L, 1);
-       x->in_error_state = 1;
-       return 0.0f;
-   }
-
-   // Verify return value is a number
-   if (!lua_isnumber(x->L, -1)) {
-       error("luajit.stk~: Lua function must return a number");
-       lua_pop(x->L, 1);
-       x->in_error_state = 1;
-       return 0.0f;
-   }
-
-   // Get the result
-   float result = (float)lua_tonumber(x->L, -1);
-   lua_pop(x->L, 1);
-
-   // Check for invalid values (NaN, Inf)
-   if (isnan(result) || isinf(result)) {
-       error("luajit.stk~: Lua returned invalid value (NaN or Inf)");
-       x->in_error_state = 1;
-       return 0.0f;
-   }
-
-   // Clamp to safe range to prevent clipping/damage
-   if (result > 1.0f) result = 1.0f;
-   if (result < -1.0f) result = -1.0f;
-
-   return result;
-}
-
-
-t_string* get_path_from_external(t_class* c, char* subpath)
-{
-    char external_path[MAX_PATH_CHARS];
-    char external_name[MAX_PATH_CHARS];
-    char conform_path[MAX_PATH_CHARS];
-    short path_id = class_getpath(c);
-    t_string* result;
-
-#ifdef __APPLE__
-    const char* ext_filename = "%s.mxo";
-#else
-    const char* ext_filename = "%s.mxe64";
-#endif
-    snprintf_zero(external_name, MAX_PATH_CHARS, ext_filename, c->c_sym->s_name);
-    path_toabsolutesystempath(path_id, external_name, external_path);
-    path_nameconform(external_path, conform_path, PATH_STYLE_MAX, PATH_TYPE_BOOT);
-    result = string_new(external_path);
-    if (subpath != NULL) {
-        string_append(result, subpath);
-    }
-    return result;
-}
-
-
-t_string* get_path_from_package(t_class* c, char* subpath)
-{
-    t_string* result;
-    t_string* external_path = get_path_from_external(c, NULL);
-
-    const char* ext_path_c = string_getptr(external_path);
-
-    // dirname() modifies its input, so we need to make a copy
-    char* path_copy = strdup(ext_path_c);
-    if (!path_copy) {
-        object_free(external_path);
-        return NULL;
-    }
-
-    char* dir1 = dirname(path_copy);
-    char* dir1_copy = strdup(dir1);
-    free(path_copy);
-
-    if (!dir1_copy) {
-        object_free(external_path);
-        return NULL;
-    }
-
-    char* dir2 = dirname(dir1_copy);
-    result = string_new(dir2);
-    free(dir1_copy);
-
-    if (subpath != NULL) {
-        string_append(result, subpath);
-    }
-
-    object_free(external_path);  // Free the temporary path
-
-    return result;
+void lstk_run_file(t_lstk *x) {
+    mxh_load_lua_file(lstk_class, x->filename, load_lua_file_adapter, x);
 }
 
 //-----------------------------------------------------------------------------------------------
 
 void ext_main(void *r)
 {
-    // object initialization, note the use of dsp_free for the freemethod, which is required
-    // unless you need to free allocated memory, in which case you should call dsp_free from
-    // your custom free function.
-
     t_class *c = class_new("luajit.stk~", (method)lstk_new, (method)lstk_free, (long)sizeof(t_lstk), 0L, A_GIMME, 0);
 
     class_addmethod(c, (method)lstk_float,    "float",    A_FLOAT, 0);
+    class_addmethod(c, (method)lstk_list,     "list",     A_GIMME, 0);
     class_addmethod(c, (method)lstk_anything, "anything", A_GIMME, 0);
     class_addmethod(c, (method)lstk_bang,     "bang",              0);
     class_addmethod(c, (method)lstk_dsp64,    "dsp64",    A_CANT,  0);
@@ -243,44 +99,25 @@ void ext_main(void *r)
 }
 
 
-void lstk_run_file(t_lstk *x)
-{
-    if (x->filename != gensym("")) {
-        char norm_path[MAX_PATH_CHARS];
-        path_nameconform(x->filename->s_name, norm_path,
-            PATH_STYLE_MAX, PATH_TYPE_BOOT);
-        if (access(norm_path, F_OK) == 0) { // file exists in path
-            post("run %s", norm_path);
-            run_lua_file(x, norm_path);
-        } else { // try in the example folder
-            t_string* path = get_path_from_package(lstk_class, "/examples/");
-            if (!path) {
-                error("luajit.stk~: failed to get package path");
-                return;
-            }
-            string_append(path, x->filename->s_name);
-            const char* lua_file = string_getptr(path);
-            post("run %s", lua_file);
-            run_lua_file(x, lua_file);
-            object_free(path);  // Free the path string
-        }
-    }
-}
-
-
 void *lstk_new(t_symbol *s, long argc, t_atom *argv)
 {
     t_lstk *x = (t_lstk *)object_alloc(lstk_class);
 
     if (x) {
         dsp_setup((t_pxobject *)x, 1);  // MSP inlets: arg is # of inlets and is REQUIRED!
-        // use 0 if you don't need inlets
+        outlet_new(x, "signal");         // signal outlet (note "signal" rather than NULL)
 
-        outlet_new(x, "signal");        // signal outlet (note "signal" rather than NULL)
         x->param0 = 0.0;
         x->param1 = 0.0;
         x->param2 = 0.0;
         x->param3 = 0.0;
+
+        // Initialize dynamic parameter array
+        x->num_params = 4;  // Default to 4 params for backward compatibility
+        for (int i = 0; i < MAX_PARAMS; i++) {
+            x->params[i] = 0.0;
+        }
+
         x->prev_sample = 0.0;
         x->samplerate = 44100.0;
         x->vectorsize = 64;
@@ -304,11 +141,10 @@ void *lstk_new(t_symbol *s, long argc, t_atom *argv)
 void lstk_free(t_lstk *x)
 {
     // Release cached function reference if it exists
-    if (x->func_ref != LUA_NOREF && x->func_ref != LUA_REFNIL) {
-        luaL_unref(x->L, LUA_REGISTRYINDEX, x->func_ref);
-    }
-    lua_close(x->L);
+    lua_engine_release_function(x->L, x->func_ref);
+    lua_engine_free(x->L);
     dsp_free((t_pxobject *)x);
+
     for(int i = (MAX_INLET_INDEX - 1); i > 0; i--) {
         if (x->inlets[i]) {
             object_free(x->inlets[i]);
@@ -349,46 +185,114 @@ void lstk_assist(t_lstk* x, void* b, long io, long idx, char* s)
 void lstk_bang(t_lstk *x)
 {
     // Release old function reference
-    if (x->func_ref != LUA_NOREF && x->func_ref != LUA_REFNIL) {
-        luaL_unref(x->L, LUA_REGISTRYINDEX, x->func_ref);
-        x->func_ref = LUA_NOREF;
-    }
+    lua_engine_release_function(x->L, x->func_ref);
+    x->func_ref = LUA_NOREF;
 
     lstk_run_file(x);
 
     // Re-cache the current function
-    lua_getglobal(x->L, x->funcname->s_name);
-    if (lua_isfunction(x->L, -1)) {
-        x->func_ref = luaL_ref(x->L, LUA_REGISTRYINDEX);
+    x->func_ref = lua_engine_cache_function(x->L, x->funcname->s_name);
+    if (x->func_ref == LUA_NOREF) {
+        x->in_error_state = 1;
+        error("function '%s' not found after reload", x->funcname->s_name);
+    } else {
         x->in_error_state = 0;
         post("reloaded and cached function: %s", x->funcname->s_name);
+    }
+}
+
+void lstk_list(t_lstk* x, t_symbol* s, long argc, t_atom* argv)
+{
+    // Handle list messages as positional numeric parameters
+    if (argc == 0) return;
+
+    // Check if all arguments are numeric (positional parameters)
+    int all_numeric = 1;
+    for (long i = 0; i < argc; i++) {
+        if (atom_gettype(argv + i) != A_FLOAT && atom_gettype(argv + i) != A_LONG) {
+            all_numeric = 0;
+            break;
+        }
+    }
+
+    if (all_numeric) {
+        // Positional numeric list: "10 0.1 4"
+        x->num_params = (argc > MAX_PARAMS) ? MAX_PARAMS : argc;
+        for (long i = 0; i < x->num_params; i++) {
+            x->params[i] = atom_getfloat(argv + i);
+        }
+        // Also update legacy params for backward compatibility
+        if (x->num_params > 0) x->param0 = x->params[0];
+        if (x->num_params > 1) x->param1 = x->params[1];
+        if (x->num_params > 2) x->param2 = x->params[2];
+        if (x->num_params > 3) x->param3 = x->params[3];
+        post("set %d params: positional", x->num_params);
     } else {
-        lua_pop(x->L, 1);
-        error("function '%s' not found after reload", x->funcname->s_name);
-        x->in_error_state = 1;
+        // Parse as named parameters: "delay 2 feedback 0.5 dry_wet 0.5"
+        if (argc % 2 != 0) {
+            error("named parameters must be in pairs: name value");
+            return;
+        }
+
+        // Clear existing named parameters
+        lua_engine_clear_named_params(x->L);
+
+        for (long i = 0; i < argc; i += 2) {
+            if (atom_gettype(argv + i) != A_SYM) {
+                error("parameter names must be symbols");
+                return;
+            }
+
+            t_symbol* param_name = atom_getsym(argv + i);
+            const char* name = param_name->s_name;
+            double value = atom_getfloat(argv + i + 1);
+
+            // Set named parameter in Lua PARAMS table
+            lua_engine_set_named_param(x->L, name, value);
+        }
+        post("set %ld named params", argc / 2);
     }
 }
 
 void lstk_anything(t_lstk* x, t_symbol* s, long argc, t_atom* argv)
 {
     if (s != gensym("")) {
-        // Release old function reference
-        if (x->func_ref != LUA_NOREF && x->func_ref != LUA_REFNIL) {
-            luaL_unref(x->L, LUA_REGISTRYINDEX, x->func_ref);
-        }
+        // Check if this is a named parameter message with arguments
+        if (argc > 0) {
+            // Check if 's' is a valid function name
+            // Try to cache it - if it succeeds, this is a combined function+params message
+            int test_ref = lua_engine_cache_function(x->L, s->s_name);
 
-        // Get the new function and cache its reference
-        lua_getglobal(x->L, s->s_name);
-        if (lua_isfunction(x->L, -1)) {
-            x->func_ref = luaL_ref(x->L, LUA_REGISTRYINDEX);
-            x->funcname = s;
-            x->in_error_state = 0;  // Clear error state on successful function change
-            post("funcname: %s", s->s_name);
+            if (test_ref != LUA_NOREF) {
+                // Valid function - this is combined syntax: "funcname param1 val1 param2 val2"
+                // Release old function reference and use new one
+                lua_engine_release_function(x->L, x->func_ref);
+                x->func_ref = test_ref;
+                x->funcname = s;
+                x->in_error_state = 0;
+                post("funcname: %s", s->s_name);
+
+                // Now process the parameters
+                lstk_list(x, s, argc, argv);
+            } else {
+                // Not a function - treat as named parameters only
+                lstk_list(x, s, argc, argv);
+            }
         } else {
-            lua_pop(x->L, 1);
-            error("'%s' is not a function", s->s_name);
-            x->func_ref = LUA_NOREF;
-            x->in_error_state = 1;
+            // No arguments - just switch function
+            // Release old function reference
+            lua_engine_release_function(x->L, x->func_ref);
+
+            // Get the new function and cache its reference
+            x->func_ref = lua_engine_cache_function(x->L, s->s_name);
+            if (x->func_ref == LUA_NOREF) {
+                x->in_error_state = 1;
+                error("'%s' is not a function", s->s_name);
+            } else {
+                x->funcname = s;
+                x->in_error_state = 0;  // Clear error state on successful function change
+                post("funcname: %s", s->s_name);
+            }
         }
     }
 }
@@ -396,21 +300,29 @@ void lstk_anything(t_lstk* x, t_symbol* s, long argc, t_atom* argv)
 
 void lstk_float(t_lstk *x, double f)
 {
-    switch (proxy_getinlet((t_object *)x)) {
+    long inlet = proxy_getinlet((t_object *)x);
+    switch (inlet) {
         case 0:
             x->param0 = f;
+            x->params[0] = f;
             break;
         case 1:
             x->param1 = f;
+            x->params[1] = f;
             break;
         case 2:
             x->param2 = f;
+            x->params[2] = f;
             break;
         case 3:
             x->param3 = f;
+            x->params[3] = f;
             break;
     }
-    // Removed post() - too noisy for RT parameter changes
+    // Ensure num_params covers the inlet that was used
+    if (inlet >= x->num_params) {
+        x->num_params = inlet + 1;
+    }
 }
 
 
@@ -424,8 +336,7 @@ void lstk_dsp64(t_lstk *x, t_object *dsp64, short *count, double samplerate, lon
     x->vectorsize = maxvectorsize;
 
     // Update Lua global
-    lua_pushnumber(x->L, samplerate);
-    lua_setglobal(x->L, "SAMPLE_RATE");
+    lua_engine_set_samplerate(x->L, samplerate);
 
     object_method(dsp64, gensym("dsp_add64"), x, lstk_perform64, 0, NULL);
 }
@@ -446,8 +357,16 @@ void lstk_perform64(t_lstk *x, t_object *dsp64, double **ins, long numins, doubl
         return;
     }
 
+    // Convert params to float array for lua_engine
+    float float_params[MAX_PARAMS];
+    for (int i = 0; i < x->num_params; i++) {
+        float_params[i] = (float)x->params[i];
+    }
+
     while (n--) {
-        prev = lua_dsp(x, *inL++, prev, n, x->param0, x->param1, x->param2, x->param3);
+        // Use dynamic parameter version
+        prev = lua_engine_call_dsp_dynamic(x->L, x->func_ref, &x->in_error_state,
+                                           *inL++, prev, n, float_params, x->num_params);
         *outL++ = prev;
     }
 
@@ -455,32 +374,19 @@ void lstk_perform64(t_lstk *x, t_object *dsp64, double **ins, long numins, doubl
 }
 
 
-// Max API wrapper functions for Lua
-static int lua_max_post(lua_State* L) {
-    const char* msg = luaL_checkstring(L, 1);
-    post("%s", msg);
-    return 0;
-}
-
-static int lua_max_error(lua_State* L) {
-    const char* msg = luaL_checkstring(L, 1);
-    error("%s", msg);
-    return 0;
-}
-
 void lstk_init_lua(t_lstk *x)
 {
-    x->L = luaL_newstate();
-    luaL_openlibs(x->L);  /* opens the standard libraries */
-
-    // Configure LuaJIT for real-time use
-    // Stop the GC initially - we'll run it manually
-    lua_gc(x->L, LUA_GCSTOP, 0);
+    // Create Lua state with RT-safe configuration
+    x->L = lua_engine_init();
+    if (!x->L) {
+        error("luajit.stk~: failed to initialize Lua engine");
+        x->in_error_state = 1;
+        return;
+    }
 
     // Set initial sample rate (will be updated in dsp64)
     x->samplerate = 44100.0;
-    lua_pushnumber(x->L, x->samplerate);
-    lua_setglobal(x->L, "SAMPLE_RATE");
+    lua_engine_set_samplerate(x->L, x->samplerate);
 
     // Initialize function reference to invalid
     x->func_ref = LUA_NOREF;
@@ -500,12 +406,6 @@ void lstk_init_lua(t_lstk *x)
         x->in_error_state = 1;
     }
 
+    // Load Lua file
     lstk_run_file(x);
-
-    // Restart GC in incremental mode with conservative settings
-    lua_gc(x->L, LUA_GCRESTART, 0);
-    // Set incremental GC: smaller steps, longer pauses between steps
-    lua_gc(x->L, LUA_GCSETPAUSE, 200);    // wait 2x memory before next GC
-    lua_gc(x->L, LUA_GCSETSTEPMUL, 100);  // slower collection
 }
-

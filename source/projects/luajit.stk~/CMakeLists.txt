@@ -42,6 +42,7 @@ target_include_directories(${PROJECT_NAME}
     ${LUA_BRIDGE}
     ${LUAJIT_INCLUDE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../libapi
+    ${CMAKE_CURRENT_SOURCE_DIR}/../common
 )
 
 
@@ -49,6 +50,7 @@ target_link_libraries(${PROJECT_NAME}
     PUBLIC
     ${STK_LIB}
     ${LUAJIT_LIB}
+    luajit_common
 )
 
 

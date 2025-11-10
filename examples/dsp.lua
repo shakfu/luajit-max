@@ -31,6 +31,11 @@ require 'fun'
 -- based on Max's audio settings. Default shown here for reference only.
 SAMPLE_RATE = SAMPLE_RATE or 44100.0
 
+-- PARAMS is a global table for named parameters set via messages
+-- e.g., sending "delay 2.0 feedback 0.5" creates PARAMS.delay and PARAMS.feedback
+-- Initialize as empty table if not already set by the external
+PARAMS = PARAMS or {}
+
 
 ----------------------------------------------------------------------------------
 -- utility functions
@@ -149,6 +154,198 @@ end
 base = function(x, fb, n, p1)
    local c = p1 / 4
    return x * c
+end
+
+----------------------------------------------------------------------------------
+-- dynamic parameter test functions
+
+-- Waveshaper with variable number of parameters
+-- Demonstrates dynamic parameter handling with positional args
+-- Usage: send numeric list like "0.5 2.0 0.7"
+--
+-- Parameters (positional):
+--   1 param:  [gain] - simple gain/attenuation
+--   2 params: [gain, drive] - gain + waveshaping drive
+--   3 params: [gain, drive, mix] - gain + drive + dry/wet mix
+--
+-- Examples:
+--   "0.5" - attenuate by 50%
+--   "1.0 2.0" - unity gain with 2x overdrive
+--   "0.8 3.0 0.7" - 0.8 gain, 3x drive, 70% wet
+waveshape = function(x, fb, n, ...)
+   local params = {...}
+   local num_params = #params
+
+   if num_params == 0 then
+      -- No params: pass through
+      return x
+   elseif num_params == 1 then
+      -- Single param: gain/attenuation
+      return x * params[1]
+   elseif num_params == 2 then
+      -- Two params: gain + waveshaping drive
+      local gain = params[1]
+      local drive = params[2]
+      -- Soft clipping waveshaper: tanh approximation
+      local shaped = x * drive
+      shaped = shaped / (1.0 + math.abs(shaped))  -- fast tanh approximation
+      return shaped * gain
+   elseif num_params >= 3 then
+      -- Three or more params: gain + drive + dry/wet mix
+      local gain = params[1]
+      local drive = params[2]
+      local mix = params[3]
+      -- Waveshape the signal
+      local shaped = x * drive
+      shaped = shaped / (1.0 + math.abs(shaped))
+      shaped = shaped * gain
+      -- Mix dry and wet
+      return shaped * mix + x * (1.0 - mix)
+   end
+end
+
+-- One-pole low-pass filter with gain and dry/wet mix
+-- Uses named parameters from PARAMS table
+-- Usage examples:
+--   1. Switch to function then set params:
+--      "lpf_gain_mix"  then  "gain 0.8 cutoff 0.3 mix 0.7"
+--   2. Combined (switch + set params in one message):
+--      "lpf_gain_mix gain 0.8 cutoff 0.3 mix 0.7"
+--   3. Update individual params:
+--      "cutoff 0.5"  or  "mix 1.0"
+--
+-- Parameters:
+--   gain: output gain (0.0 - 2.0, default 1.0)
+--   cutoff: filter cutoff coefficient (0.0 = full filtering, 1.0 = no filtering, default 0.5)
+--   mix: dry/wet mix (0.0 = dry only, 1.0 = wet only, default 1.0)
+lpf_gain_mix = function(x, fb, n, ...)
+   -- Access named parameters with defaults
+   local gain = PARAMS.gain or 1.0
+   local cutoff = PARAMS.cutoff or 0.5
+   local mix = PARAMS.mix or 1.0
+
+   -- One-pole low-pass filter
+   -- fb is the previous output (one-sample feedback)
+   -- y[n] = y[n-1] + cutoff * (x[n] - y[n-1])
+   local filtered = fb + cutoff * (x - fb)
+
+   -- Apply gain
+   local processed = filtered * gain
+
+   -- Dry/wet mix
+   local output = processed * mix + x * (1.0 - mix)
+
+   return output
+end
+
+-- Test function showing both positional and named parameter support
+-- Usage examples:
+--   Positional: "0.5 0.3"
+--   Named: "gain 0.5 tone 0.3"
+--   Combined: "hybrid_filter gain 0.8 tone 0.6"
+hybrid_filter = function(x, fb, n, ...)
+   local gain, tone
+
+   -- Try to get from positional params first
+   local pos_params = {...}
+   if #pos_params >= 2 then
+      gain = pos_params[1]
+      tone = pos_params[2]
+   else
+      -- Fall back to named params with defaults
+      gain = PARAMS.gain or 1.0
+      tone = PARAMS.tone or 0.5
+   end
+
+   -- Simple tone control (low-pass filter coefficient)
+   local filtered = fb + tone * (x - fb)
+   return filtered * gain
+end
+
+-- Simple delay with feedback using a circular buffer
+-- Usage: "delay time 0.5 feedback 0.6 mix 0.5"
+--
+-- Parameters:
+--   time: delay time in seconds (0.01 - 2.0, default 0.5)
+--   feedback: feedback amount (0.0 - 0.95, default 0.5)
+--   mix: dry/wet mix (0.0 = dry, 1.0 = wet, default 0.5)
+--
+-- Note: This creates a global delay buffer on first use
+delay = (function()
+   -- Static variables (closure)
+   local buffer = {}
+   local buffer_size = 0
+   local write_pos = 1
+   local initialized = false
+
+   return function(x, fb, n, ...)
+      -- Get parameters
+      local time = PARAMS.time or 0.5
+      local feedback_amt = PARAMS.feedback or 0.5
+      local mix = PARAMS.mix or 0.5
+
+      -- Clamp feedback to prevent runaway
+      feedback_amt = math.min(feedback_amt, 0.95)
+
+      -- Calculate buffer size needed (in samples)
+      local needed_size = math.floor(time * SAMPLE_RATE)
+      needed_size = math.max(needed_size, 1)
+      needed_size = math.min(needed_size, math.floor(2.0 * SAMPLE_RATE)) -- max 2 seconds
+
+      -- Reinitialize buffer if size changed
+      if not initialized or needed_size ~= buffer_size then
+         buffer = {}
+         buffer_size = needed_size
+         for i = 1, buffer_size do
+            buffer[i] = 0.0
+         end
+         write_pos = 1
+         initialized = true
+      end
+
+      -- Read delayed sample
+      local delayed = buffer[write_pos] or 0.0
+
+      -- Write new sample (input + feedback)
+      buffer[write_pos] = x + delayed * feedback_amt
+
+      -- Advance write position (circular)
+      write_pos = write_pos + 1
+      if write_pos > buffer_size then
+         write_pos = 1
+      end
+
+      -- Mix dry and wet
+      return x * (1.0 - mix) + delayed * mix
+   end
+end)()
+
+-- Test function that uses many parameters
+-- params: freq1, freq2, freq3, amp1, amp2, amp3, mix
+oscillator_bank = function(x, fb, n, ...)
+   local params = {...}
+   local num_params = #params
+
+   -- Default values
+   local freq1 = params[1] or 220
+   local freq2 = params[2] or 440
+   local freq3 = params[3] or 880
+   local amp1 = params[4] or 0.33
+   local amp2 = params[5] or 0.33
+   local amp3 = params[6] or 0.34
+   local mix = params[7] or 1.0
+
+   -- Simple phase-based oscillators (using n as phase proxy)
+   local phase1 = (n * freq1 / SAMPLE_RATE) % 1.0
+   local phase2 = (n * freq2 / SAMPLE_RATE) % 1.0
+   local phase3 = (n * freq3 / SAMPLE_RATE) % 1.0
+
+   local osc1 = math.sin(phase1 * math.pi * 2) * amp1
+   local osc2 = math.sin(phase2 * math.pi * 2) * amp2
+   local osc3 = math.sin(phase3 * math.pi * 2) * amp3
+
+   local synth = (osc1 + osc2 + osc3)
+   return synth * mix + x * (1 - mix)
 end
 
 

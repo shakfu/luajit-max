@@ -49,11 +49,22 @@ MACRO(SUBDIRLIST result curdir)
   SET(${result} ${dirlist})
 ENDMACRO()
 
+# Build common library first (shared by all externals)
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/projects/common/CMakeLists.txt")
+  message("Generating: common (shared library)")
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/projects/common)
+endif ()
+
 # Generate a project for every folder in the "source/category" folder
 SUBDIRLIST(CATEGORY_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/source)
 foreach (cat_dir ${CATEGORY_DIRS})
   SUBDIRLIST(PROJECT_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/source/${cat_dir})
   foreach (project_dir ${PROJECT_DIRS})
+    # Skip common directory since we already built it
+    if (project_dir STREQUAL "common")
+      continue()
+    endif ()
+
     set(project_path ${CMAKE_CURRENT_SOURCE_DIR}/source/${cat_dir}/${project_dir})
     message("checking in: ${project_path}")
     if (EXISTS "${project_path}/CMakeLists.txt")

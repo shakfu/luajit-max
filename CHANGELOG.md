@@ -18,6 +18,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ## [Unreleased]
 
 ### Added
+- **Dynamic Parameter System**: Flexible parameter handling for both `luajit~` and `luajit.stk~`
+  - **Up to 32 Parameters**: Increased from fixed 1/4 parameters to dynamic array of 32 parameters
+  - **Positional Parameters**: Send numeric lists (e.g., `0.5 2.0 0.7`) for quick parameter updates
+  - **Named Parameters**: Send arbitrary name/value pairs (e.g., `gain 0.8 cutoff 0.3 mix 0.7`)
+  - **Global PARAMS Table**: Named parameters stored in Lua global table accessible as `PARAMS.gain`, `PARAMS.cutoff`, etc.
+  - **Combined Syntax**: Switch function and set parameters in one message (e.g., `lpf_gain_mix gain 0.8 cutoff 0.6 mix 1.0`)
+  - **Backward Compatible**: Legacy single/4-parameter functions continue to work
+  - See `source/notes/dynamic_parameters.md` for complete documentation
+- **Example DSP Functions**: New practical examples demonstrating parameter handling
+  - `waveshape`: Soft-clipping waveshaper with variable parameters (1-3: gain, drive, mix)
+  - `lpf_gain_mix`: One-pole low-pass filter using named parameters (gain, cutoff, mix)
+  - `delay`: Proper delay with circular buffer (time, feedback, mix parameters)
+  - `hybrid_filter`: Demonstrates both positional and named parameter support
 - **luajit External**: New general-purpose Max external for writing complete externals in Lua
   - Dynamic inlet/outlet configuration (1-16 each)
   - Message routing to Lua functions (bang, int, float, list, anything)
@@ -45,6 +58,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
   - `CRITICAL_FIXES_SUMMARY.md` - Summary of critical fixes applied
 
 ### Changed
+- **Parameter Handling Architecture**: Complete overhaul of parameter system
+  - Both externals now use `lua_engine_call_dsp_dynamic()` for flexible parameter passing
+  - Added `lua_engine_set_named_param()` and `lua_engine_clear_named_params()` functions
+  - `mlj_list()` and `lstk_list()` handlers detect and route positional vs named parameters
+  - `mlj_anything()` and `lstk_anything()` now support combined function+parameter syntax
+- **PARAMS Global Initialization**: Added `PARAMS = PARAMS or {}` to `examples/dsp.lua` for safe initialization
 - **Refactor luajit.stk~**: Moved binding code to a header
 - **Time-Based Parameters**: Delay function in `examples/dsp_stk.lua` now uses seconds instead of samples
   - p0 parameter is now in seconds (e.g., 0.05 = 50ms)
