@@ -145,3 +145,117 @@ double clamp(double x, double min, double max)
     if (x > max) return max;
     return x;
 }
+
+//------------------------------------------------------------------------------
+// Oscillator Functions (stateless - require external phase management)
+//------------------------------------------------------------------------------
+
+// Sine wave oscillator
+// phase: 0.0 - 1.0 (normalized phase)
+// Returns: -1.0 to 1.0
+double osc_sine(double phase)
+{
+    return sin(phase * 2.0 * M_PI);
+}
+
+// Saw wave oscillator (naive)
+// phase: 0.0 - 1.0 (normalized phase)
+// Returns: -1.0 to 1.0
+double osc_saw(double phase)
+{
+    return 2.0 * phase - 1.0;
+}
+
+// Saw wave oscillator (band-limited using polyBLEP)
+// phase: 0.0 - 1.0 (normalized phase)
+// phase_inc: phase increment per sample (freq/samplerate)
+// Returns: -1.0 to 1.0
+double osc_saw_bl(double phase, double phase_inc)
+{
+    double value = 2.0 * phase - 1.0;
+
+    // PolyBLEP residual
+    double t = phase;
+    if (t < phase_inc) {
+        t /= phase_inc;
+        value += 2.0 * (t + t * (1.0 - t));
+    } else if (t > 1.0 - phase_inc) {
+        t = (t - 1.0) / phase_inc;
+        value += 2.0 * (t + t * (1.0 + t));
+    }
+
+    return value;
+}
+
+// Square wave oscillator (naive)
+// phase: 0.0 - 1.0 (normalized phase)
+// pulse_width: 0.0 - 1.0 (duty cycle, 0.5 = square)
+// Returns: -1.0 to 1.0
+double osc_square(double phase, double pulse_width)
+{
+    return (phase < pulse_width) ? 1.0 : -1.0;
+}
+
+// Square wave oscillator (band-limited using polyBLEP)
+// phase: 0.0 - 1.0 (normalized phase)
+// pulse_width: 0.0 - 1.0 (duty cycle, 0.5 = square)
+// phase_inc: phase increment per sample (freq/samplerate)
+// Returns: -1.0 to 1.0
+double osc_square_bl(double phase, double pulse_width, double phase_inc)
+{
+    double value = (phase < pulse_width) ? 1.0 : -1.0;
+
+    // PolyBLEP at rising edge (phase = 0)
+    double t = phase;
+    if (t < phase_inc) {
+        t /= phase_inc;
+        value += 2.0 * (t - t * t - 1.0);
+    } else if (t > 1.0 - phase_inc) {
+        t = (t - 1.0) / phase_inc;
+        value += 2.0 * (t * t + t + 1.0);
+    }
+
+    // PolyBLEP at falling edge (phase = pulse_width)
+    t = phase - pulse_width;
+    if (t < 0.0) t += 1.0;
+    if (t < phase_inc) {
+        t /= phase_inc;
+        value -= 2.0 * (t - t * t - 1.0);
+    } else if (t > 1.0 - phase_inc) {
+        t = (t - 1.0) / phase_inc;
+        value -= 2.0 * (t * t + t + 1.0);
+    }
+
+    return value;
+}
+
+// Triangle wave oscillator
+// phase: 0.0 - 1.0 (normalized phase)
+// Returns: -1.0 to 1.0
+double osc_triangle(double phase)
+{
+    if (phase < 0.5) {
+        return 4.0 * phase - 1.0;
+    } else {
+        return -4.0 * phase + 3.0;
+    }
+}
+
+// Phase increment calculation helper
+// freq: frequency in Hz
+// sample_rate: sample rate in Hz
+// Returns: phase increment per sample (0.0 - 1.0)
+double osc_phase_inc(double freq, double sample_rate)
+{
+    return freq / sample_rate;
+}
+
+// Phase wraparound helper
+// phase: current phase value
+// Returns: wrapped phase (0.0 - 1.0)
+double osc_phase_wrap(double phase)
+{
+    while (phase >= 1.0) phase -= 1.0;
+    while (phase < 0.0) phase += 1.0;
+    return phase;
+}

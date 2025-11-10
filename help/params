@@ -1,5 +1,0 @@
-0, param0 param1 param2 param3;
-1, freq time phase phase_offset;
-2, delay fb_ratio balance tap_delay;
-3, freq phase nharmonics p3;
-4, shift p1 p2 p3;

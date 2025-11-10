@@ -6,8 +6,29 @@ local ffi = require 'ffi'
 
 -- Load the libdsp shared library
 -- The library is in the support directory (Max package structure)
--- Max automatically includes support directory in the library search path
-local dsp = ffi.load("libdsp")
+
+-- Try loading from different locations
+local dsp
+local load_success, load_error = pcall(function()
+   -- load relative to examples directory (../support/libdsp.dylib)
+   local function script_dir()
+      local str = debug.getinfo(1, "S").source:sub(2)
+      return str:match("(.*/)")
+   end
+   local examples_dir = script_dir()
+   local support_path = examples_dir .. "../support/libdsp.dylib"
+   local ok, lib = pcall(function() return ffi.load(support_path) end)
+   if ok then
+      dsp = lib
+      return
+   end
+
+   error("Could not load libdsp from any location")
+end)
+
+if not load_success then
+   error("Failed to load libdsp: " .. tostring(load_error))
+end
 
 -- Declare C function signatures
 ffi.cdef[[
@@ -31,6 +52,16 @@ double envelope_follow(double x, double prev, double attack, double release);
 double wavefold(double x, double threshold);
 double ring_mod(double x, double modulator);
 double clamp(double x, double min, double max);
+
+// Oscillator functions
+double osc_sine(double phase);
+double osc_saw(double phase);
+double osc_saw_bl(double phase, double phase_inc);
+double osc_square(double phase, double pulse_width);
+double osc_square_bl(double phase, double pulse_width, double phase_inc);
+double osc_triangle(double phase);
+double osc_phase_inc(double freq, double sample_rate);
+double osc_phase_wrap(double phase);
 ]]
 
 return dsp

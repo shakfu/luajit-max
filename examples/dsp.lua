@@ -34,9 +34,9 @@ local ffi_available = pcall(function()
 end)
 
 if ffi_available then
-   post("FFI DSP library loaded successfully")
+   api.post("FFI DSP library loaded successfully")
 else
-   post("FFI DSP library not available (continuing without it)")
+   api.post("FFI DSP library not available (continuing without it)")
 end
 
 -- SAMPLE_RATE is automatically set by the luajit~ external
@@ -460,6 +460,197 @@ else
 
    ffi_envelope = function(x, fb, n, ...)
       return math.abs(x) * 0.1 -- Simple fallback
+   end
+end
+
+-- Oscillator functions using FFI (if available)
+-- These use a global phase accumulator that persists across calls
+if ffi_available then
+   -- Global phase state for oscillators (one per oscillator type)
+   OSC_PHASE = OSC_PHASE or {}
+
+   -- Sine oscillator using C function
+   -- Usage: "ffi_osc_sine freq 440.0 gain 0.5"
+   -- Parameters:
+   --   freq: frequency in Hz (default 440.0)
+   --   gain: output gain (default 0.5)
+   ffi_osc_sine = function(x, fb, n, ...)
+      local freq = PARAMS.freq or 440.0
+      local gain = PARAMS.gain or 0.5
+
+      -- Initialize phase if needed
+      OSC_PHASE.sine = OSC_PHASE.sine or 0.0
+
+      -- Get current output
+      local output = dsp_c.osc_sine(OSC_PHASE.sine) * gain
+
+      -- Calculate phase increment
+      local phase_inc = dsp_c.osc_phase_inc(freq, SAMPLE_RATE)
+
+      -- Update phase and wrap
+      OSC_PHASE.sine = dsp_c.osc_phase_wrap(OSC_PHASE.sine + phase_inc)
+
+      return output
+   end
+
+   -- Sawtooth oscillator (band-limited) using C function
+   -- Usage: "ffi_osc_saw freq 220.0 gain 0.5"
+   -- Parameters:
+   --   freq: frequency in Hz (default 220.0)
+   --   gain: output gain (default 0.5)
+   ffi_osc_saw = function(x, fb, n, ...)
+      local freq = PARAMS.freq or 220.0
+      local gain = PARAMS.gain or 0.5
+
+      -- Initialize phase if needed
+      OSC_PHASE.saw = OSC_PHASE.saw or 0.0
+
+      -- Calculate phase increment
+      local phase_inc = dsp_c.osc_phase_inc(freq, SAMPLE_RATE)
+
+      -- Get current output (band-limited)
+      local output = dsp_c.osc_saw_bl(OSC_PHASE.saw, phase_inc) * gain
+
+      -- Update phase and wrap
+      OSC_PHASE.saw = dsp_c.osc_phase_wrap(OSC_PHASE.saw + phase_inc)
+
+      return output
+   end
+
+   -- Square/pulse wave oscillator (band-limited) using C function
+   -- Usage: "ffi_osc_square freq 110.0 width 0.5 gain 0.5"
+   -- Parameters:
+   --   freq: frequency in Hz (default 110.0)
+   --   width: pulse width (0.0 - 1.0, 0.5 = square, default 0.5)
+   --   gain: output gain (default 0.5)
+   ffi_osc_square = function(x, fb, n, ...)
+      local freq = PARAMS.freq or 110.0
+      local width = PARAMS.width or 0.5
+      local gain = PARAMS.gain or 0.5
+
+      -- Initialize phase if needed
+      OSC_PHASE.square = OSC_PHASE.square or 0.0
+
+      -- Calculate phase increment
+      local phase_inc = dsp_c.osc_phase_inc(freq, SAMPLE_RATE)
+
+      -- Get current output (band-limited)
+      local output = dsp_c.osc_square_bl(OSC_PHASE.square, width, phase_inc) * gain
+
+      -- Update phase and wrap
+      OSC_PHASE.square = dsp_c.osc_phase_wrap(OSC_PHASE.square + phase_inc)
+
+      return output
+   end
+
+   -- Triangle oscillator using C function
+   -- Usage: "ffi_osc_tri freq 330.0 gain 0.5"
+   -- Parameters:
+   --   freq: frequency in Hz (default 330.0)
+   --   gain: output gain (default 0.5)
+   ffi_osc_tri = function(x, fb, n, ...)
+      local freq = PARAMS.freq or 330.0
+      local gain = PARAMS.gain or 0.5
+
+      -- Initialize phase if needed
+      OSC_PHASE.tri = OSC_PHASE.tri or 0.0
+
+      -- Get current output
+      local output = dsp_c.osc_triangle(OSC_PHASE.tri) * gain
+
+      -- Calculate phase increment
+      local phase_inc = dsp_c.osc_phase_inc(freq, SAMPLE_RATE)
+
+      -- Update phase and wrap
+      OSC_PHASE.tri = dsp_c.osc_phase_wrap(OSC_PHASE.tri + phase_inc)
+
+      return output
+   end
+
+   -- FM synthesis using sine oscillators
+   -- Usage: "ffi_osc_fm carrier 440.0 modulator 220.0 index 2.0 gain 0.5"
+   -- Parameters:
+   --   carrier: carrier frequency in Hz (default 440.0)
+   --   modulator: modulator frequency in Hz (default 220.0)
+   --   index: modulation index (0.0 - 10.0, default 2.0)
+   --   gain: output gain (default 0.5)
+   ffi_osc_fm = function(x, fb, n, ...)
+      local carrier_freq = PARAMS.carrier or 440.0
+      local mod_freq = PARAMS.modulator or 220.0
+      local mod_index = PARAMS.index or 2.0
+      local gain = PARAMS.gain or 0.5
+
+      -- Initialize phases if needed
+      OSC_PHASE.fm_carrier = OSC_PHASE.fm_carrier or 0.0
+      OSC_PHASE.fm_mod = OSC_PHASE.fm_mod or 0.0
+
+      -- Calculate phase increments
+      local carrier_inc = dsp_c.osc_phase_inc(carrier_freq, SAMPLE_RATE)
+      local mod_inc = dsp_c.osc_phase_inc(mod_freq, SAMPLE_RATE)
+
+      -- Get modulator output
+      local modulator = dsp_c.osc_sine(OSC_PHASE.fm_mod) * mod_index
+
+      -- Modulate carrier phase
+      local modulated_phase = dsp_c.osc_phase_wrap(OSC_PHASE.fm_carrier + modulator / (2.0 * math.pi))
+
+      -- Get carrier output
+      local output = dsp_c.osc_sine(modulated_phase) * gain
+
+      -- Update phases
+      OSC_PHASE.fm_carrier = dsp_c.osc_phase_wrap(OSC_PHASE.fm_carrier + carrier_inc)
+      OSC_PHASE.fm_mod = dsp_c.osc_phase_wrap(OSC_PHASE.fm_mod + mod_inc)
+
+      return output
+   end
+else
+   -- Fallback oscillators if FFI not available (pure Lua)
+   OSC_PHASE = OSC_PHASE or {}
+
+   ffi_osc_sine = function(x, fb, n, ...)
+      local freq = PARAMS.freq or 440.0
+      local gain = PARAMS.gain or 0.5
+      OSC_PHASE.sine = OSC_PHASE.sine or 0.0
+      local output = math.sin(OSC_PHASE.sine * 2.0 * math.pi) * gain
+      OSC_PHASE.sine = OSC_PHASE.sine + (freq / SAMPLE_RATE)
+      while OSC_PHASE.sine >= 1.0 do OSC_PHASE.sine = OSC_PHASE.sine - 1.0 end
+      return output
+   end
+
+   ffi_osc_saw = function(x, fb, n, ...)
+      local freq = PARAMS.freq or 220.0
+      local gain = PARAMS.gain or 0.5
+      OSC_PHASE.saw = OSC_PHASE.saw or 0.0
+      local output = (2.0 * OSC_PHASE.saw - 1.0) * gain
+      OSC_PHASE.saw = OSC_PHASE.saw + (freq / SAMPLE_RATE)
+      while OSC_PHASE.saw >= 1.0 do OSC_PHASE.saw = OSC_PHASE.saw - 1.0 end
+      return output
+   end
+
+   ffi_osc_square = function(x, fb, n, ...)
+      local freq = PARAMS.freq or 110.0
+      local width = PARAMS.width or 0.5
+      local gain = PARAMS.gain or 0.5
+      OSC_PHASE.square = OSC_PHASE.square or 0.0
+      local output = (OSC_PHASE.square < width and 1.0 or -1.0) * gain
+      OSC_PHASE.square = OSC_PHASE.square + (freq / SAMPLE_RATE)
+      while OSC_PHASE.square >= 1.0 do OSC_PHASE.square = OSC_PHASE.square - 1.0 end
+      return output
+   end
+
+   ffi_osc_tri = function(x, fb, n, ...)
+      local freq = PARAMS.freq or 330.0
+      local gain = PARAMS.gain or 0.5
+      OSC_PHASE.tri = OSC_PHASE.tri or 0.0
+      local phase = OSC_PHASE.tri
+      local output = (phase < 0.5 and (4.0 * phase - 1.0) or (-4.0 * phase + 3.0)) * gain
+      OSC_PHASE.tri = OSC_PHASE.tri + (freq / SAMPLE_RATE)
+      while OSC_PHASE.tri >= 1.0 do OSC_PHASE.tri = OSC_PHASE.tri - 1.0 end
+      return output
+   end
+
+   ffi_osc_fm = function(x, fb, n, ...)
+      return 0.0 -- FM synthesis requires sine, too complex for simple fallback
    end
 end
 

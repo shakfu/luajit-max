@@ -16,6 +16,39 @@
         "boxes": [
             {
                 "box": {
+                    "id": "obj-15",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 376.0, 460.0, 293.0, 21.0 ],
+                    "text": "ffi_osc_fm carrier 220. modulator 220. index 2. gain 0.5"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-14",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 376.0, 424.0, 296.0, 21.0 ],
+                    "text": "ffi_osc_fm carrier 440. modulator 220. index 2. gain 0.5"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-6",
+                    "maxclass": "message",
+                    "numinlets": 2,
+                    "numoutlets": 1,
+                    "outlettype": [ "" ],
+                    "patching_rect": [ 376.0, 397.0, 150.0, 21.0 ],
+                    "text": "ffi_softclip drive 3. mix 0.7"
+                }
+            },
+            {
+                "box": {
                     "id": "obj-12",
                     "linecount": 2,
                     "maxclass": "comment",
@@ -216,6 +249,18 @@
             },
             {
                 "patchline": {
+                    "destination": [ "obj-1", 0 ],
+                    "source": [ "obj-14", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-1", 0 ],
+                    "source": [ "obj-15", 0 ]
+                }
+            },
+            {
+                "patchline": {
                     "destination": [ "obj-10", 0 ],
                     "source": [ "obj-2", 0 ]
                 }
@@ -256,6 +301,12 @@
                 "patchline": {
                     "destination": [ "obj-1", 0 ],
                     "source": [ "obj-5", 0 ]
+                }
+            },
+            {
+                "patchline": {
+                    "destination": [ "obj-1", 0 ],
+                    "source": [ "obj-6", 0 ]
                 }
             },
             {
