@@ -4,12 +4,20 @@ BUILD := build
 LUAJIT := $(BUILD)/deps/luajit-install/lib/libluajit-5.1.a
 STK := $(BUILD)/deps/stk-install/lib/libstk.a
 
-.PHONY: cmake fixup clean setup 
+# Check if system LuaJIT is available via Homebrew
+SYSTEM_LUAJIT := $(shell brew --prefix luajit 2>/dev/null)
+ifneq ($(SYSTEM_LUAJIT),)
+    LUAJIT_DEP :=
+else
+    LUAJIT_DEP := $(LUAJIT)
+endif
+
+.PHONY: cmake fixup clean setup
 
 all: cmake
 
 
-cmake: $(LUAJIT) $(STK)
+cmake: $(LUAJIT_DEP) $(STK)
 	@mkdir -p build && \
 		cd build && \
 		cmake .. -GXcode \

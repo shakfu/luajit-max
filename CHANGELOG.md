@@ -18,6 +18,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ## [Unreleased]
 
 ### Added
+- **System LuaJIT Support**: Build system now detects and uses system-installed LuaJIT (via Homebrew) if available
+  - Automatically checks for Homebrew LuaJIT installation during CMake configuration
+  - Falls back to building LuaJIT from source if system version not found
+  - Applies to all three externals: `luajit`, `luajit~`, and `luajit.stk~`
+  - Reduces build time by skipping LuaJIT compilation when system version is available
+  - Makefile detects Homebrew LuaJIT and skips build dependency accordingly
 - **Oscillator Functions in libdsp**: Added band-limited oscillator implementations
   - Basic waveforms: `osc_sine()`, `osc_saw()`, `osc_square()`, `osc_triangle()`
   - Band-limited versions: `osc_saw_bl()`, `osc_square_bl()` using polyBLEP anti-aliasing

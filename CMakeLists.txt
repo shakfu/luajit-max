@@ -38,6 +38,31 @@ if(CMAKE_HOST_APPLE) # i.e if is_macos check if homebrew is used aand if so get 
     endif()
 endif()
 
+# Check for system LuaJIT (Homebrew or other package manager)
+set(USE_SYSTEM_LUAJIT OFF)
+if(CMAKE_HOST_APPLE)
+    execute_process(
+        COMMAND brew --prefix luajit
+        OUTPUT_VARIABLE LUAJIT_BREW_PREFIX
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+        RESULT_VARIABLE BREW_LUAJIT_RESULT
+    )
+    if(BREW_LUAJIT_RESULT EQUAL 0 AND EXISTS "${LUAJIT_BREW_PREFIX}/include/luajit-2.1")
+        set(USE_SYSTEM_LUAJIT ON)
+        set(SYSTEM_LUAJIT_PREFIX ${LUAJIT_BREW_PREFIX})
+        set(SYSTEM_LUAJIT_INCLUDE ${LUAJIT_BREW_PREFIX}/include/luajit-2.1)
+        set(SYSTEM_LUAJIT_LIB ${LUAJIT_BREW_PREFIX}/lib/libluajit-5.1.a)
+        message(STATUS "Found system LuaJIT: ${LUAJIT_BREW_PREFIX}")
+    endif()
+endif()
+
+if(USE_SYSTEM_LUAJIT)
+    message(STATUS "Using system LuaJIT from: ${SYSTEM_LUAJIT_PREFIX}")
+else()
+    message(STATUS "Using built LuaJIT from: ${CMAKE_BINARY_DIR}/deps/luajit-install")
+endif()
+
 MACRO(SUBDIRLIST result curdir)
   FILE(GLOB children RELATIVE ${curdir} ${curdir}/*)
   SET(dirlist "")

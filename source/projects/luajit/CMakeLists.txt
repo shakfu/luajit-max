@@ -6,12 +6,19 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 #############################################################
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version" FORCE)
 
-set(LUAJIT ${CMAKE_BINARY_DIR}/deps/luajit-install)
-set(LUAJIT_INCLUDE ${LUAJIT}/include/luajit-2.1)
-set(LUAJIT_LIB ${LUAJIT}/lib/libluajit-5.1.a)
-
-MESSAGE("LUAJIT_INCLUDE: ${LUAJIT_INCLUDE}")
-MESSAGE("LUAJIT_LIB: ${LUAJIT_LIB}")
+# Use system LuaJIT if available, otherwise use built version
+if(USE_SYSTEM_LUAJIT)
+    set(LUAJIT_INCLUDE ${SYSTEM_LUAJIT_INCLUDE})
+    set(LUAJIT_LIB ${SYSTEM_LUAJIT_LIB})
+    MESSAGE("Using system LUAJIT_INCLUDE: ${LUAJIT_INCLUDE}")
+    MESSAGE("Using system LUAJIT_LIB: ${LUAJIT_LIB}")
+else()
+    set(LUAJIT ${CMAKE_BINARY_DIR}/deps/luajit-install)
+    set(LUAJIT_INCLUDE ${LUAJIT}/include/luajit-2.1)
+    set(LUAJIT_LIB ${LUAJIT}/lib/libluajit-5.1.a)
+    MESSAGE("Using built LUAJIT_INCLUDE: ${LUAJIT_INCLUDE}")
+    MESSAGE("Using built LUAJIT_LIB: ${LUAJIT_LIB}")
+endif()
 
 include_directories(
   "${MAX_SDK_INCLUDES}"
