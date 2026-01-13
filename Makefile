@@ -5,11 +5,19 @@ LUAJIT := $(BUILD)/deps/luajit-install/lib/libluajit-5.1.a
 STK := $(BUILD)/deps/stk-install/lib/libstk.a
 
 # Check if system LuaJIT is available via Homebrew
-SYSTEM_LUAJIT := $(shell brew --prefix luajit 2>/dev/null)
-ifneq ($(SYSTEM_LUAJIT),)
-    LUAJIT_DEP :=
-else
+# Use FORCE_BUILD_LUAJIT=1 to skip system LuaJIT and build from source
+ifdef FORCE_BUILD_LUAJIT
     LUAJIT_DEP := $(LUAJIT)
+    CMAKE_EXTRA_ARGS := -DFORCE_BUILD_LUAJIT=ON
+else
+    SYSTEM_LUAJIT := $(shell brew --prefix luajit 2>/dev/null)
+    ifneq ($(SYSTEM_LUAJIT),)
+        LUAJIT_DEP :=
+        CMAKE_EXTRA_ARGS :=
+    else
+        LUAJIT_DEP := $(LUAJIT)
+        CMAKE_EXTRA_ARGS :=
+    endif
 endif
 
 .PHONY: cmake fixup clean setup
@@ -22,6 +30,7 @@ cmake: $(LUAJIT_DEP) $(STK)
 		cd build && \
 		cmake .. -GXcode \
 			-DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+			$(CMAKE_EXTRA_ARGS) \
 			&& \
 		cmake --build . --config Release
 

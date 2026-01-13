@@ -55,6 +55,12 @@ make setup
 make
 ```
 
+The build system automatically detects and uses system-installed LuaJIT (via Homebrew) if available. To force building LuaJIT from source instead:
+
+```bash
+FORCE_BUILD_LUAJIT=1 make
+```
+
 Note: `make setup` does the following:
 
 ```bash

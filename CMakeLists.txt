@@ -38,9 +38,14 @@ if(CMAKE_HOST_APPLE) # i.e if is_macos check if homebrew is used aand if so get 
     endif()
 endif()
 
+# Option to force building LuaJIT from source even if system LuaJIT is available
+option(FORCE_BUILD_LUAJIT "Force building LuaJIT from source" OFF)
+
 # Check for system LuaJIT (Homebrew or other package manager)
 set(USE_SYSTEM_LUAJIT OFF)
-if(CMAKE_HOST_APPLE)
+if(FORCE_BUILD_LUAJIT)
+    message(STATUS "FORCE_BUILD_LUAJIT enabled, skipping system LuaJIT detection")
+elseif(CMAKE_HOST_APPLE)
     execute_process(
         COMMAND brew --prefix luajit
         OUTPUT_VARIABLE LUAJIT_BREW_PREFIX

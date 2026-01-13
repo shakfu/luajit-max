@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 ## [Unreleased]
 
 ### Added
+- **FORCE_BUILD_LUAJIT Option**: Added build option to skip system LuaJIT detection and build from source
+  - Use `FORCE_BUILD_LUAJIT=1 make` to force building LuaJIT from source
+  - Useful for testing the bundled LuaJIT build even when system LuaJIT is installed
+  - CMake receives `-DFORCE_BUILD_LUAJIT=ON` flag automatically
 - **System LuaJIT Support**: Build system now detects and uses system-installed LuaJIT (via Homebrew) if available
   - Automatically checks for Homebrew LuaJIT installation during CMake configuration
   - Falls back to building LuaJIT from source if system version not found
