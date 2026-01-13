@@ -4,10 +4,15 @@
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version" FORCE)
 
-# Get LuaJIT paths
-set(LUAJIT ${CMAKE_BINARY_DIR}/deps/luajit-install)
-set(LUAJIT_INCLUDE ${LUAJIT}/include/luajit-2.1)
-set(LUAJIT_LIB ${LUAJIT}/lib/libluajit-5.1.a)
+# Get LuaJIT paths (use system or local build based on parent config)
+if(USE_SYSTEM_LUAJIT)
+    set(LUAJIT_INCLUDE ${SYSTEM_LUAJIT_INCLUDE})
+    set(LUAJIT_LIB ${SYSTEM_LUAJIT_LIB})
+else()
+    set(LUAJIT ${CMAKE_BINARY_DIR}/deps/luajit-install)
+    set(LUAJIT_INCLUDE ${LUAJIT}/include/luajit-2.1)
+    set(LUAJIT_LIB ${LUAJIT}/lib/libluajit-5.1.a)
+endif()
 
 # Get Max SDK includes (from parent scope)
 set(MAX_SDK_BASE ${CMAKE_CURRENT_SOURCE_DIR}/../../max-sdk-base)
