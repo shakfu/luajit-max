@@ -4,7 +4,7 @@
         "appversion": {
             "major": 9,
             "minor": 1,
-            "revision": 0,
+            "revision": 2,
             "architecture": "x64",
             "modernui": 1
         },
@@ -14,6 +14,16 @@
         "default_fontname": "Verdana",
         "gridsize": [ 5.0, 5.0 ],
         "boxes": [
+            {
+                "box": {
+                    "id": "obj-17",
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 241.5, 292.0, 43.0, 19.0 ],
+                    "text": "param"
+                }
+            },
             {
                 "box": {
                     "id": "obj-15",
@@ -91,19 +101,6 @@
                     "outlettype": [ "", "bang" ],
                     "parameter_enable": 0,
                     "patching_rect": [ 238.0, 321.0, 50.0, 21.0 ]
-                }
-            },
-            {
-                "box": {
-                    "floatoutput": 1,
-                    "id": "obj-2",
-                    "maxclass": "slider",
-                    "numinlets": 1,
-                    "numoutlets": 1,
-                    "outlettype": [ "" ],
-                    "parameter_enable": 0,
-                    "patching_rect": [ 238.0, 185.0, 20.0, 112.0 ],
-                    "size": 1.0
                 }
             },
             {
@@ -261,12 +258,6 @@
             },
             {
                 "patchline": {
-                    "destination": [ "obj-10", 0 ],
-                    "source": [ "obj-2", 0 ]
-                }
-            },
-            {
-                "patchline": {
                     "destination": [ "obj-36", 1 ],
                     "source": [ "obj-26", 0 ]
                 }
@@ -319,6 +310,14 @@
         "parameters": {
             "obj-26::obj-21::obj-6": [ "live.tab[3]", "live.tab[1]", 0 ],
             "obj-26::obj-35": [ "[5]", "Level", 0 ],
+            "parameterbanks": {
+                "0": {
+                    "index": 0,
+                    "name": "",
+                    "parameters": [ "-", "-", "-", "-", "-", "-", "-", "-" ],
+                    "buttons": [ "-", "-", "-", "-", "-", "-", "-", "-" ]
+                }
+            },
             "inherited_shortname": 1
         },
         "autosave": 0
